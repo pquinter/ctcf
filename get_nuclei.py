@@ -10,6 +10,7 @@ from skimage.filters import sobel
 import warnings
 from skimage.filters import threshold_adaptive
 from scipy import ndimage
+from skimage.draw import circle_perimeter
 #from skimage.filters import try_all_threshold
 
 %matplotlib
@@ -76,54 +77,97 @@ def rectangleROI(im, thresh=None):
     roi_coords = (slice(min(rows),max(rows)+1), slice(min(cols),max(cols)+1))
     return roi_coords
 
+def label_sizesel(im, im_mask, bounds=(100, 1500)):
+    """
+    Create and label markers from image mask, 
+    filter by area and compute region properties
+    """
+    markers = morphology.label(im_mask)
+    # delete markers of unusual area, likely not nuclei
+    nuclei = skimage.measure.regionprops(markers, im)
+    areas = [n.area for n in nuclei]
+    # labels of markers within area bounds
+    labels_ = [n.label for n in nuclei_rfp if bounds[0] < n.area < bounds[1]]
+    # remove markers outside bounds
+    ix = np.in1d(markers.ravel(), _labels).reshape(markers.shape)
+    markers[~ix] = 0
+    # update nuclei regionprops list
+    nuclei = [n for n in nuclei if n.label in labels_]
+    return markers, nuclei
+
+def nuclei_int(im_r, im_g, plot=False):
+    """
+    get nuclei intensities
+    """
+
+    thresh = skimage.filters.threshold_li(im_r)
+    # get nuclei markers 
+    nuclei = peak_local_max(im_r, indices=True, threshold_abs=thresh, min_distance=25)
+
+    # remove oversaturated nuclei
+    nuclei = [tuple(n) for n in nuclei if im_r[tuple(n)] < 4000]
+
+    # draw circle around non-oversaturated nuclei max for plotting
+    circles = [circle_perimeter(r, c, 10) for (r,c) in nuclei]
+    im_plot = im_r.copy()
+    for circle in circles:
+        im_plot[circle] = np.max(im_plot) 
+
+    # get intensities of non-oversaturated nuclei
+    int_r = np.array([im_r[n] for n in nuclei])
+    int_g = np.array([im_g[n] for n in nuclei])
+    int_ratio = int_r / int_g
+
+    if plot: plot_nuceli_int(im_plot, int_ratio)
+
+    return im_plot, int_ratio
+
+def plot_nuceli_int(im_plot, int_ratio):
+    fig, ax = plt.subplots(2)
+    ax[0].imshow(im_plot, plt.cm.viridis)
+    sns.stripplot(int_ratio, orient='v', size=10, alpha=0.5, cmap='viridis', ax=ax[1])
+    ax[1].tick_params(axis='y', which='both', labelleft='off', labelright='on')
+    ax[1].set_ylabel('intensity ratio', fontsize=20)
+    ax[1].yaxis.set_label_position("right")
+    return None
+
 gfp, rfp = gfp[1:], rfp[1:]
-for im in rfp:
-    im = fakeRGB2gray(im)
-    # remove oversaturated regions
-    #im[im>4000] = 0
+for im_num in range(len(rfp)):
+    im_r = rfp[im_num].copy()
+    im_g = gfp[im_num].copy()
+
     # subregion histogram equalization to improve contrast
     #im = skimage.exposure.equalize_adapthist(im)
-    thresh = skimage.filters.threshold_li(im)
-    im = rectangleROI(im, thresh)
-    im[im<thresh] = 0
-    im_thresh = threshold_adaptive(im,15)
-    im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=200)
-    # two options to get defined nuclei masks for morphological reconstruction
-    # a)
-    im_thresh = ndimage.morphology.binary_closing(im_thresh)
-    # b)
+    # get roi from rfp and apply to both
+    roi = rectangleROI(im_r, thresh)
+    im_r = im_r[roi]
+    im_g = im_g[roi]
+
+    #im_thresh = threshold_adaptive(im, 15)
+    #im_thresh = morphology.binary_opening(im_thresh, morphology.disk(3))
+    #im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=200)
+
     #im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
-    # then perform below operation on either output
-    im_thresh = morphology.binary_opening(im_thresh, morphology.disk(5))
+    #im_thresh = ndimage.morphology.binary_closing(im_thresh)
+    #im_thresh = morphology.binary_opening(im_thresh, morphology.disk(5))
 
-    # do morphological opening to enhance contrast between nuclei and background
-    im_open = morphology.opening(im, morphology.disk(5))
-    # get nuclei markers 
-    markers = peak_local_max(im_open, indices=False, threshold_abs=0.3, min_distance=10)
-    # make the mask fit the markers
-    im_thresh = markers+im_thresh
+    #im_open = morphology.opening(im, morphology.disk(5))
+
+#    # make the mask fit the markers
+#    im_thresh = markers+im_thresh
     # reconstruct
-    selem = morphology.disk(10)
-    markers = morphology.reconstruction(markers,im_thresh,selem=selem)
-    markers  = skimage.morphology.remove_small_objects(markers>0, min_size=100)
 
-    # uncomment below if finding peak local max on im_open
-    #markers = skimage.morphology.remove_small_objects(markers, min_size=50)
-    #markers = markers.astype(float)
-    #markers[markers>0] = 0.4
-    markers = morphology.label(markers)
-    # get nuclei
-    assert markers.shape == im.shape
-    nuclei_rfp = skimage.measure.regionprops(markers, im)
-    nuclei_gfp = skimage.measure.regionprops(markers, im)
-    # get intensities
-    intensities = [n.max_intensity for n in nuclei]
-    break
-fig, ax = plt.subplots(1,3)
-ax[0].imshow(im)
-ax[1].imshow(im)
-ax[1].imshow(markers, alpha=0.3, cmap='viridis')
-sns.stripplot(intensities, orient='v', size=10, alpha=0.5, cmap='viridis', ax=ax[2])
-ax[2].tick_params(axis='y', which='both', labelleft='off', labelright='on')
-ax[2].set_ylabel('mean intensity (a.u.)', fontsize=20)
-ax[2].yaxis.set_label_position("right")
+    #selem = morphology.disk(300)
+    #markers = morphology.reconstruction(markers, im, selem=selem)
+    ##markers  = skimage.morphology.remove_small_objects(markers>0, min_size=100)
+
+    ## uncomment below if finding peak local max on im_open
+    ##markers = skimage.morphology.remove_small_objects(markers, min_size=50)
+    ##markers = markers.astype(float)
+    ##markers[markers>0] = 0.4
+
+    #markers, nuclei = label_sizesel(im, im_thresh)
+    #
+    #intensities = [n.max_intensity for n in nuclei]
+    im_plot, int_ratio = nuclei_int(im_r, im_g, plot=True)
+
