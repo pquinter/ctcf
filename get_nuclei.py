@@ -11,6 +11,8 @@ import warnings
 from skimage.filters import threshold_adaptive
 from scipy import ndimage
 from skimage.draw import circle_perimeter
+from scipy.spatial.distance import pdist, squareform
+import matplotlib.gridspec as gridspec
 #from skimage.filters import try_all_threshold
 
 %matplotlib
@@ -95,40 +97,69 @@ def label_sizesel(im, im_mask, bounds=(100, 1500)):
     nuclei = [n for n in nuclei if n.label in labels_]
     return markers, nuclei
 
-def nuclei_int(im_r, im_g, plot=False):
+def nuclei_int(im_r, im_g, plot=False, min_distance=10):
     """
-    get nuclei intensities
+    get ratio of nuclei intensities and show which nuclei are being measured
     """
 
-    thresh = skimage.filters.threshold_li(im_r)
+    thresh_r = skimage.filters.threshold_li(im_r)
+    # get identical ROI in of both images
+    roi = rectangleROI(im_r, thresh_r)
+    im_r = im_r[roi]
+    im_g = im_g[roi]
+
     # get nuclei markers 
-    nuclei = peak_local_max(im_r, indices=True, threshold_abs=thresh, min_distance=25)
+    nuclei = peak_local_max(im_r, indices=True, threshold_abs=thresh_r, 
+            min_distance=min_distance)
 
     # remove oversaturated nuclei
     nuclei = [tuple(n) for n in nuclei if im_r[tuple(n)] < 4000]
 
-    # draw circle around non-oversaturated nuclei max for plotting
-    circles = [circle_perimeter(r, c, 10) for (r,c) in nuclei]
-    im_plot = im_r.copy()
-    for circle in circles:
-        im_plot[circle] = np.max(im_plot) 
+    # remove markers that are too close to each other
+    dist = squareform(pdist(nuclei))
+    ind = np.where((dist<25)&(dist>0))[0]
+    too_close = [ix for (i, ix) in enumerate(ind) if i%2]
+    for i in too_close: nuclei.pop(i)
 
     # get intensities of non-oversaturated nuclei
     int_r = np.array([im_r[n] for n in nuclei])
     int_g = np.array([im_g[n] for n in nuclei])
+    # only use intensities if both images are above thresh_g
+    # as we already know that int_r are all above thresh_r
+    thresh_g = skimage.filters.threshold_li(im_g)
+    i_thresh = np.where(int_g > thresh_g)
+    int_r, int_g = int_r[i_thresh], int_g[i_thresh]
+
     int_ratio = int_r / int_g
 
-    if plot: plot_nuceli_int(im_plot, int_ratio)
+    if plot: 
+        # Draw circles around identified nuclei for plotting
+        im_plot = circle_nuclei(nuclei, im_r)
+        plot_nuceli_int(im_plot, int_ratio)
 
-    return im_plot, int_ratio
+    return im_plot, int_ratio, int_r, int_g
+
+def circle_nuclei(nuclei, im):
+    """
+    Draw circles around identified nuclei for plotting
+    """
+
+    circles = [circle_perimeter(r, c, 10) for (r,c) in nuclei]
+    im_plot = im.copy()
+    for circle in circles:
+        im_plot[circle] = np.max(im_plot) 
+    return im_plot
 
 def plot_nuceli_int(im_plot, int_ratio):
-    fig, ax = plt.subplots(2)
-    ax[0].imshow(im_plot, plt.cm.viridis)
-    sns.stripplot(int_ratio, orient='v', size=10, alpha=0.5, cmap='viridis', ax=ax[1])
-    ax[1].tick_params(axis='y', which='both', labelleft='off', labelright='on')
-    ax[1].set_ylabel('intensity ratio', fontsize=20)
-    ax[1].yaxis.set_label_position("right")
+    gs = gridspec.GridSpec(1, 4)
+    ax1 = plt.subplot(gs[0:3])
+    ax2 = plt.subplot(gs[3])
+    ax1.imshow(im_plot, plt.cm.viridis)
+    sns.stripplot(int_ratio, orient='v', size=10, alpha=0.5, cmap='viridis', ax=ax2)
+    #ax2.tick_params(axis='y', which='both', labelleft='off', labelright='on')
+    ax2.set_ylabel('intensity ratio', fontsize=20)
+    #ax2.yaxis.set_label_position("right")
+    plt.tight_layout()
     return None
 
 gfp, rfp = gfp[1:], rfp[1:]
@@ -139,9 +170,6 @@ for im_num in range(len(rfp)):
     # subregion histogram equalization to improve contrast
     #im = skimage.exposure.equalize_adapthist(im)
     # get roi from rfp and apply to both
-    roi = rectangleROI(im_r, thresh)
-    im_r = im_r[roi]
-    im_g = im_g[roi]
 
     #im_thresh = threshold_adaptive(im, 15)
     #im_thresh = morphology.binary_opening(im_thresh, morphology.disk(3))
@@ -169,5 +197,5 @@ for im_num in range(len(rfp)):
     #markers, nuclei = label_sizesel(im, im_thresh)
     #
     #intensities = [n.max_intensity for n in nuclei]
-    im_plot, int_ratio = nuclei_int(im_r, im_g, plot=True)
+    im_plot, int_ratio, i1, i2 = nuclei_int(im_r, im_g, plot=True)
 
