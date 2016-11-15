@@ -80,7 +80,7 @@ def rectangleROI(im, thresh=None):
     roi_coords = (slice(min(rows),max(rows)+1), slice(min(cols),max(cols)+1))
     return roi_coords
 
-def label_sizesel(im, im_mask, bounds=(100, 1500)):
+def label_sizesel(im, im_mask, bounds=(50, 1500)):
     """
     Create and label markers from image mask, 
     filter by area and compute region properties
@@ -189,6 +189,49 @@ def mask_image(im):
     im_thresh = morphology.binary_opening(im_thresh, morphology.disk(3))
     return im_thresh
 
+def manual_sel(markers_r, nuclei_r, markers_g, nuclei_g):
+    """
+    Manual (click) selection of nuclei
+    """
+    # click on nuclei
+    n_nuclei = min(len(nuclei_r), len(nuclei_g))
+    fig, axes = plt.subplots(1,2)
+    axes[0].imshow(markers_r, plt.cm.Paired)
+    axes[1].imshow(markers_g, plt.cm.Paired)
+    axes[0].set_title('Select markers here\n(Press Alt+Click when done)', fontsize=20)
+    coords_r = plt.ginput(n_nuclei, show_clicks=True)
+    coords_r = [(int(c1), int(c2)) for (c2, c1) in coords_r]
+    plt.close('all')
+    fig, axes = plt.subplots(1,2)
+    axes[0].imshow(markers_r, plt.cm.Paired)
+    axes[1].imshow(markers_g, plt.cm.Paired)
+    axes[1].set_title('Now select markers here\n(Press Alt+Click when done)', fontsize=20)
+    coords_g = plt.ginput(n_nuclei, show_clicks=True)
+    coords_g = [(int(c1), int(c2)) for (c2, c1) in coords_g]
+    plt.close('all')
+
+    def update_sel(markers, nuclei, coords):
+        all_labels = np.unique(markers)
+        sel_labels = [markers[c] for c in coords]
+        rem_labels = [l for l in all_labels if l not in sel_labels]
+
+        # get selected nuclei
+        nuclei = [n for n in nuclei if n.label in sel_labels]
+        # remove unselected markers
+        for l in rem_labels:
+            markers[np.where(np.isclose(markers,l))] = 0
+        return markers, nuclei
+
+    markers_r, nuclei_r = update_sel(markers_r, nuclei_r, coords_r)
+    markers_g, nuclei_g = update_sel(markers_g, nuclei_g, coords_g)
+
+
+    return nuclei_r, markers_r, nuclei_g, markers_g
+
+    
+
+
+
 gfp, rfp = gfp[1:], rfp[1:]
 for im_num in range(len(rfp)):
     im_r = rfp[im_num].copy()
@@ -222,6 +265,18 @@ for im_num in range(len(rfp)):
     #intensities = [n.max_intensity for n in nuclei]
     im_plot, int_ratio, i1, i2 = nuclei_int(im_r, im_g, plot=True)
 
-io.imshow(im_r)
-markers = plt.ginput(10)
-morphology.reconstruction(
+# test
+im_r = rfp[5][rectangleROI(rfp[5])]
+im_g = gfp[5][rectangleROI(gfp[5])]
+im1 = mask_image(im_r)
+im2 = mask_image(im_g)
+markers_r, nuclei_r = label_sizesel(im_r, im1)
+markers_g, nuclei_g = label_sizesel(im_g, im2)
+#fig, ax = plt.subplots(1,2)
+#ax[0].imshow(markers_r)
+#ax[1].imshow(markers_g)
+nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(markers_r, nuclei_r, markers_g, nuclei_g)
+fig2, ax2 = plt.subplots(1,2)
+ax2[0].imshow(markers_r)
+ax2[1].imshow(markers_g)
+
