@@ -153,13 +153,6 @@ def get_nuclei_peaks(im, thresh, min_distance):
 #        for i in too_close: nuclei.pop(i)
     return nuclei_
 
-def pair_nuclei(nuclei_r, nuclei_g):
-    """
-    Pair closest nuclei UNFINISHED
-    """
-    KDtree = cKDTree(nuclei_r)
-    nuclei_g_ = [n for n in nuclei_g if KDtree.query(n)[0] < 30]
-    return nuclei_g_
 
 def circle_nuclei(nuclei, im):
     """
