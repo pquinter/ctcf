@@ -86,16 +86,20 @@ def label_sizesel(im, im_mask, bounds=(50, 1500)):
     filter by area and compute region properties
     """
     markers = morphology.label(im_mask)
-    # delete markers of unusual area, likely not nuclei
     nuclei = skimage.measure.regionprops(markers, im)
+    # get only markers within area bounds and not oversaturated
     areas = [n.area for n in nuclei]
-    # labels of markers within area bounds
-    labels_ = [n.label for n in nuclei if bounds[0] < n.area < bounds[1]]
-    # remove markers outside bounds
-    ix = np.in1d(markers.ravel(), labels_).reshape(markers.shape)
-    markers[~ix] = 0
-    # update nuclei regionprops list
-    nuclei = [n for n in nuclei if n.label in labels_]
+    all_labels = np.unique(markers)
+    sel_labels = [n.label for n in nuclei if bounds[0] < n.area < bounds[1] \
+                    and n.max_intensity < 4000]
+    print(sel_labels)
+    rem_labels = [l for l in all_labels if l not in sel_labels]
+    # remove unselected markers
+    for l in rem_labels:
+        markers[np.where(np.isclose(markers,l))] = 0
+
+    nuclei = [n for n in nuclei if n.label in sel_labels]
+
     return markers, nuclei
 
 def nuclei_int(im_r, im_g, plot=False, min_distance=10):
@@ -116,7 +120,8 @@ def nuclei_int(im_r, im_g, plot=False, min_distance=10):
     markers_r, nuclei_r = label_sizesel(im_r, im1)
     markers_g, nuclei_g = label_sizesel(im_g, im2)
 
-    nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(markers_r, nuclei_r, markers_g, nuclei_g)
+    nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(im_r, markers_r, 
+            nuclei_r, im_g, markers_g, nuclei_g)
 
     # get nuclei intensities
     int_r = np.array([n.mean_intensity for n in nuclei_r])
@@ -129,13 +134,14 @@ def nuclei_int(im_r, im_g, plot=False, min_distance=10):
 
     int_ratio = int_r / int_g
 
+    # Draw circles around identified nuclei for plotting
+    im_plot_r = circle_nuclei(nuclei_r, im_r)
+    im_plot_g = circle_nuclei(nuclei_g, im_g)
+
     if plot: 
-        # Draw circles around identified nuclei for plotting
-        im_plot_r = circle_nuclei(nuclei_r, im_r)
-        im_plot_g = circle_nuclei(nuclei_g, im_g)
         plot_nuclei_int(im_plot_r, im_plot_g, int_ratio)
 
-    return int_ratio, int_r, int_g
+    return int_ratio, int_r, int_g, im_plot_r, im_plot_g
 
 
 def circle_nuclei(nuclei, im):
@@ -146,7 +152,7 @@ def circle_nuclei(nuclei, im):
     nuclei_c = [n.centroid for n in nuclei]
     circles = []
     for d in (10, 12, 14):
-        circles += [circle_perimeter(int(r), int(c), d) for (r,c) in nuclei_c]
+        circles += [circle_perimeter(int(r), int(c), d, shape=im.shape) for (r,c) in nuclei_c]
     im_plot = im.copy()
     for circle in circles:
         im_plot[circle] = np.max(im_plot)
@@ -178,26 +184,24 @@ def mask_image(im):
     im_thresh = morphology.binary_opening(im_thresh, morphology.disk(3))
     return im_thresh
 
-def manual_sel(markers_r, nuclei_r, markers_g, nuclei_g):
+def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
     """
     Manual (click) selection of nuclei
     """
-    # click on nuclei
-    n_nuclei = min(len(nuclei_r), len(nuclei_g))
-    fig, axes = plt.subplots(1,2)
-    axes[0].imshow(markers_r, plt.cm.Paired)
-    axes[1].imshow(markers_g, plt.cm.Paired)
-    axes[0].set_title('Select markers here\n(Press Alt+Click when done)', fontsize=20)
-    coords_r = plt.ginput(n_nuclei, show_clicks=True)
-    coords_r = [(int(c1), int(c2)) for (c2, c1) in coords_r]
-    plt.close('all')
-    fig, axes = plt.subplots(1,2)
-    axes[0].imshow(markers_r, plt.cm.Paired)
-    axes[1].imshow(markers_g, plt.cm.Paired)
-    axes[1].set_title('Now select markers here\n(Press Alt+Click when done)', fontsize=20)
-    coords_g = plt.ginput(n_nuclei, show_clicks=True)
-    coords_g = [(int(c1), int(c2)) for (c2, c1) in coords_g]
-    plt.close('all')
+    coords_rg = []
+    for i in (1,3):
+        # click on nuclei
+        fig, axes = plt.subplots(1,4, figsize=(25,10))
+        axes[0].imshow(im_r, plt.cm.viridis)
+        axes[1].imshow(markers_r, plt.cm.Paired)
+        axes[2].imshow(im_g, plt.cm.viridis)
+        axes[3].imshow(markers_g, plt.cm.Paired)
+        axes[i].set_title('Select markers here\n(Press Alt+Click when done)', fontsize=20)
+        coords = plt.ginput(100, show_clicks=True)
+        coords = [(int(c1), int(c2)) for (c2, c1) in coords]
+        plt.close('all')
+        coords_rg.append(coords)
+    coords_r, coords_g = coords_rg
 
     def update_sel(markers, nuclei, coords):
         all_labels = np.unique(markers)
@@ -217,12 +221,18 @@ def manual_sel(markers_r, nuclei_r, markers_g, nuclei_g):
 
     return nuclei_r, markers_r, nuclei_g, markers_g
 
-    
 
-
-
-gfp, rfp = gfp[1:], rfp[1:]
-for im_num in range(len(rfp)):
+int_ratios = []
+im_plots_r = []
+im_plots_g = []
+#gfp, rfp = gfp[1:], rfp[1:]
+for im_num in range(3):
     im_r = rfp[im_num].copy()
     im_g = gfp[im_num].copy()
-    int_ratio, i1, i2 = nuclei_int(im_r, im_g, plot=True)
+
+    int_ratio, i1, i2, im_plot_r, im_plot_g = nuclei_int(im_r, im_g, plot=False)
+    int_ratios.append(int_ratio)
+    im_plots_r.append(im_plot_r)
+    im_plots_g.append(im_plot_g)
+
+plot_nuclei_int(im_plot_r[-1], im_plot_g[-1], int_ratio)
