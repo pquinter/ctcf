@@ -80,7 +80,7 @@ def rectangleROI(im, thresh=None):
     roi_coords = (slice(min(rows),max(rows)+1), slice(min(cols),max(cols)+1))
     return roi_coords
 
-def label_sizesel(im, im_mask, bounds=(50, 1500)):
+def label_sizesel(im, im_mask, bounds=(50, 1500), max_int = 4000):
     """
     Create and label markers from image mask, 
     filter by area and compute region properties
@@ -91,8 +91,7 @@ def label_sizesel(im, im_mask, bounds=(50, 1500)):
     areas = [n.area for n in nuclei]
     all_labels = np.unique(markers)
     sel_labels = [n.label for n in nuclei if bounds[0] < n.area < bounds[1] \
-                    and n.max_intensity < 4000]
-    print(sel_labels)
+                    and n.max_intensity < max_int]
     rem_labels = [l for l in all_labels if l not in sel_labels]
     # remove unselected markers
     for l in rem_labels:
