@@ -105,17 +105,23 @@ def nuclei_int(im_r, im_g, plot=False, min_distance=10):
 
     thresh_r = skimage.filters.threshold_li(im_r)
     thresh_g = skimage.filters.threshold_li(im_g)
-    # get identical ROI in of both images
+    # Get identical ROI in of both images
     roi = rectangleROI(im_r, thresh_r)
     im_r = im_r[roi]
     im_g = im_g[roi]
 
-    nuclei_r = get_nuclei_peaks(im_r, thresh_r, min_distance)
-    nuclei_g = get_nuclei_peaks(im_g, thresh_g, min_distance)
+    im1 = mask_image(im_r)
+    im2 = mask_image(im_g)
 
-    # get intensities of non-oversaturated nuclei
-    int_r = np.array([im_r[n] for n in nuclei])
-    int_g = np.array([im_g[n] for n in nuclei])
+    markers_r, nuclei_r = label_sizesel(im_r, im1)
+    markers_g, nuclei_g = label_sizesel(im_g, im2)
+
+    nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(markers_r, nuclei_r, markers_g, nuclei_g)
+
+    # get nuclei intensities
+    int_r = np.array([n.mean_intensity for n in nuclei_r])
+    int_g = np.array([n.mean_intensity for n in nuclei_g])
+
     # only use intensities if both images are above thresh_g
     # as we already know that int_r are all above thresh_r
     i_thresh = np.where(int_g > thresh_g)
@@ -125,33 +131,11 @@ def nuclei_int(im_r, im_g, plot=False, min_distance=10):
 
     if plot: 
         # Draw circles around identified nuclei for plotting
-        im_plot = circle_nuclei(nuclei, im_r)
-        plot_nuceli_int(im_plot, int_ratio)
+        im_plot_r = circle_nuclei(nuclei_r, im_r)
+        im_plot_g = circle_nuclei(nuclei_g, im_g)
+        plot_nuclei_int(im_plot_r, im_plot_g, int_ratio)
 
-    return im_plot, int_ratio, int_r, int_g
-
-def get_nuclei_peaks(im, thresh, min_distance):
-    # get nuclei markers 
-    nuclei = peak_local_max(im, indices=True, threshold_abs=thresh, 
-            min_distance=min_distance)
-
-    # remove oversaturated nuclei
-    nuclei = [tuple(n) for n in nuclei if im[tuple(n)] < 4000]
-
-    # remove markers that are too close to each other because of flat areas
-    nuclei_ = []
-    for i in range(len(nuclei)-1):
-        if not np.isclose(im[nuclei[i]], im[nuclei[i+1]]):
-            nuclei_.append(nuclei[i])
-
-#    # remove markers that are too close to each other
-#    dist = squareform(pdist(nuclei))
-#    ind = np.where((dist<min_distance)&(dist>0))
-#    too_close = [ix for (i, ix) in enumerate(ind) if i%2][0]
-#    #new_nuclei = [nuclei[i] for i in ]
-#    if len(too_close) > 0: 
-#        for i in too_close: nuclei.pop(i)
-    return nuclei_
+    return int_ratio, int_r, int_g
 
 
 def circle_nuclei(nuclei, im):
@@ -159,22 +143,27 @@ def circle_nuclei(nuclei, im):
     Draw circles around identified nuclei for plotting
     """
 
-    circles = [circle_perimeter(r, c, 10) for (r,c) in nuclei]
+    nuclei_c = [n.centroid for n in nuclei]
+    circles = []
+    for d in (10, 12, 14):
+        circles += [circle_perimeter(int(r), int(c), d) for (r,c) in nuclei_c]
     im_plot = im.copy()
     for circle in circles:
-        im_plot[circle] = np.max(im_plot) 
+        im_plot[circle] = np.max(im_plot)
     return im_plot
 
-def plot_nuceli_int(im_plot_r, im_plot_g, int_ratio):
-    gs = gridspec.GridSpec(1, 6)
+def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
+    gs = gridspec.GridSpec(1, 7)
     ax1 = plt.subplot(gs[0:3])
     ax2 = plt.subplot(gs[3:6])
     ax3 = plt.subplot(gs[6])
     ax1.imshow(im_plot_r, plt.cm.viridis)
+    ax1.set_title('red channel nuclei', fontsize=20)
     ax2.imshow(im_plot_g, plt.cm.viridis)
+    ax2.set_title('green channel nuclei', fontsize=20)
     sns.stripplot(int_ratio, orient='v', size=10, alpha=0.5, cmap='viridis', ax=ax3)
     #ax2.tick_params(axis='y', which='both', labelleft='off', labelright='on')
-    ax2.set_ylabel('intensity ratio', fontsize=20)
+    ax3.set_ylabel('intensity ratio', fontsize=20)
     #ax2.yaxis.set_label_position("right")
     plt.tight_layout()
     return None
@@ -236,47 +225,4 @@ gfp, rfp = gfp[1:], rfp[1:]
 for im_num in range(len(rfp)):
     im_r = rfp[im_num].copy()
     im_g = gfp[im_num].copy()
-
-    # subregion histogram equalization to improve contrast
-    #im = skimage.exposure.equalize_adapthist(im)
-    # get roi from rfp and apply to both
-
-
-    #im_thresh = ndimage.morphology.binary_closing(im_thresh)
-    #im_thresh = morphology.binary_opening(im_thresh, morphology.disk(5))
-
-    #im_open = morphology.opening(im, morphology.disk(5))
-
-#    # make the mask fit the markers
-#    im_thresh = markers+im_thresh
-    # reconstruct
-
-    #selem = morphology.disk(300)
-    #markers = morphology.reconstruction(markers, im, selem=selem)
-    ##markers  = skimage.morphology.remove_small_objects(markers>0, min_size=100)
-
-    ## uncomment below if finding peak local max on im_open
-    ##markers = skimage.morphology.remove_small_objects(markers, min_size=50)
-    ##markers = markers.astype(float)
-    ##markers[markers>0] = 0.4
-
-    #markers, nuclei = label_sizesel(im, im_thresh)
-    #
-    #intensities = [n.max_intensity for n in nuclei]
-    im_plot, int_ratio, i1, i2 = nuclei_int(im_r, im_g, plot=True)
-
-# test
-im_r = rfp[5][rectangleROI(rfp[5])]
-im_g = gfp[5][rectangleROI(gfp[5])]
-im1 = mask_image(im_r)
-im2 = mask_image(im_g)
-markers_r, nuclei_r = label_sizesel(im_r, im1)
-markers_g, nuclei_g = label_sizesel(im_g, im2)
-#fig, ax = plt.subplots(1,2)
-#ax[0].imshow(markers_r)
-#ax[1].imshow(markers_g)
-nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(markers_r, nuclei_r, markers_g, nuclei_g)
-fig2, ax2 = plt.subplots(1,2)
-ax2[0].imshow(markers_r)
-ax2[1].imshow(markers_g)
-
+    int_ratio, i1, i2 = nuclei_int(im_r, im_g, plot=True)
