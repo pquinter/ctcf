@@ -1,27 +1,27 @@
 from matplotlib import pyplot as plt
-import pandas as pd
-import numpy as np
 import seaborn as sns
 sns.set_style('white')
+
+import pandas as pd
+import numpy as np
+
+import warnings
+
+import os
+import glob
+
 import skimage
 from skimage import io, morphology
 from skimage.feature import peak_local_max
 from skimage.filters import sobel
-import warnings
 from skimage.filters import threshold_adaptive
-from scipy import ndimage
 from skimage.draw import circle_perimeter
+from scipy import ndimage
+
 from scipy.spatial.distance import pdist, squareform
 import matplotlib.gridspec as gridspec
 from scipy.spatial import cKDTree
-#from skimage.filters import try_all_threshold
 
-%matplotlib
-
-rfp_fname = '../data/wQC60/wQC60_test_TexasRed.tif'
-gfp_fname = '../data/wQC60/wQC60_test_wtGFP.tif'
-gfp = io.imread_collection(gfp_fname)
-rfp = io.imread_collection(rfp_fname)
 
 def split_project(stack):
     """
@@ -100,18 +100,19 @@ def rectangleROI(im, thresh=None):
     roi_coords = (slice(min(rows),max(rows)+1), slice(min(cols),max(cols)+1))
     return roi_coords
 
-def label_sizesel(im, im_mask, bounds=(50, 1500), max_int = 4000):
+def label_sizesel(im, im_mask, max_int, min_int, min_size, max_size):
     """
     Create and label markers from image mask, 
     filter by area and compute region properties
     """
     markers = morphology.label(im_mask)
     nuclei = skimage.measure.regionprops(markers, im)
-    # get only markers within area bounds and not oversaturated
+    # get only markers within area bounds, above intensity thersh and 
+    # not oversaturated
     areas = [n.area for n in nuclei]
     all_labels = np.unique(markers)
-    sel_labels = [n.label for n in nuclei if bounds[0] < n.area < bounds[1] \
-                    and n.max_intensity < max_int]
+    sel_labels = [n.label for n in nuclei if min_size < n.area < max_size \
+                    and min_int < n.max_intensity < max_int]
     rem_labels = [l for l in all_labels if l not in sel_labels]
     # remove unselected markers
     for l in rem_labels:
@@ -121,13 +122,13 @@ def label_sizesel(im, im_mask, bounds=(50, 1500), max_int = 4000):
 
     return markers, nuclei
 
-def nuclei_int(im_r, im_g, plot=False, min_distance=10):
+def nuclei_int(im_r, im_g, plot=False, min_distance=10, manual_selection=False):
     """
     get ratio of nuclei intensities and show which nuclei are being measured
     """
 
-    thresh_r = skimage.filters.threshold_li(im_r)
-    thresh_g = skimage.filters.threshold_li(im_g)
+    thresh_r = skimage.filters.threshold_otsu(im_r)
+    thresh_g = skimage.filters.threshold_otsu(im_g)
     # Get identical ROI in of both images
     roi = rectangleROI(im_r, thresh_r)
     im_r = im_r[roi]
@@ -136,22 +137,23 @@ def nuclei_int(im_r, im_g, plot=False, min_distance=10):
     im1 = mask_image(im_r)
     im2 = mask_image(im_g)
 
-    markers_r, nuclei_r = label_sizesel(im_r, im1)
-    markers_g, nuclei_g = label_sizesel(im_g, im2)
+    # Nuclei area and intensity bounds
+    max_int =  2**cam_bitdepth - 1
+    min_int = min(thresh_r, thresh_g) * 2
+    min_size, max_size = 15, 200
 
-    nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(im_r, markers_r, 
+    markers_r, nuclei_r = label_sizesel(im_r, im1, max_int, min_int, min_size, max_size)
+    markers_g, nuclei_g = label_sizesel(im_g, im2, max_int, min_int, min_size, max_size)
+
+    if manual_selection:
+        nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(im_r, markers_r, 
             nuclei_r, im_g, markers_g, nuclei_g)
 
     # get nuclei intensities
     int_r = np.array([n.mean_intensity for n in nuclei_r])
     int_g = np.array([n.mean_intensity for n in nuclei_g])
 
-    # only use intensities if both images are above thresh_g
-    # as we already know that int_r are all above thresh_r
-    i_thresh = np.where(int_g > thresh_g)
-    int_r, int_g = int_r[i_thresh], int_g[i_thresh]
-
-    int_ratio = int_r / int_g
+    int_ratio = int_g / int_r
 
     # Draw circles around identified nuclei for plotting
     im_plot_r = circle_nuclei(nuclei_r, im_r)
@@ -188,7 +190,7 @@ def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
     ax2.set_title('green channel nuclei', fontsize=20)
     sns.stripplot(int_ratio, orient='v', size=10, alpha=0.5, cmap='viridis', ax=ax3)
     #ax2.tick_params(axis='y', which='both', labelleft='off', labelright='on')
-    ax3.set_ylabel('intensity ratio', fontsize=20)
+    ax3.set_ylabel('intensity ratio (gfp/rfp)', fontsize=20)
     #ax2.yaxis.set_label_position("right")
     plt.tight_layout()
     return None
@@ -198,9 +200,9 @@ def mask_image(im):
     Create a binary mask to segment nuclei
     """
     im_thresh = threshold_adaptive(im, 15)
-    im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=200)
+    im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
-    im_thresh = morphology.binary_opening(im_thresh, morphology.disk(3))
+    im_thresh = morphology.binary_opening(im_thresh)
     return im_thresh
 
 def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
@@ -240,6 +242,23 @@ def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
 
     return nuclei_r, markers_r, nuclei_g, markers_g
 
+
+%matplotlib
+
+cam_bitdepth = 16
+
+data_dir = '../data/leica_data/' 
+# get directories ignoring hidden files by default (i.e. .DS_Store)
+data_dir = glob.glob(data_dir + '*')
+strains = [s.split('/')[-1] for s in data_dir]
+
+for d in data_dir:
+    im_dir = glob.glob(d + '*.tif')
+    break
+    for im_dir in 
+
+gfp = io.imread_collection(gfp_fname)
+rfp = io.imread_collection(rfp_fname)
 
 int_ratios = []
 im_plots_r = []
