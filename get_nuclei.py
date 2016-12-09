@@ -23,6 +23,26 @@ gfp_fname = '../data/wQC60/wQC60_test_wtGFP.tif'
 gfp = io.imread_collection(gfp_fname)
 rfp = io.imread_collection(rfp_fname)
 
+def split_project(stack):
+    """
+    Split stack by channels and z-project each channel
+    """
+    stack = np.copy(stack)
+    num = len(stack)
+    # gfp channel is images with even index, rfp is odd
+    gfp = stack[np.arange(0, num, 2)]
+    rfp = stack[np.arange(1, num, 2)]
+    gfp = z_project(gfp)
+    rfp = z_project(rfp)
+    return gfp, rfp
+
+def z_project(stack):
+    """
+    Z-project based on maximum value.
+    """
+    z_im = np.maximum.reduce([z for z in stack])
+    return z_im
+
 def plot_gallery(images, n_row=3, n_col=4, fig_title=None):
     """
     Helper function to plot a gallery of portraits
