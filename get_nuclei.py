@@ -121,13 +121,30 @@ def label_sizesel(im, im_mask, max_int, min_int, min_size, max_size):
 
     return markers, nuclei
 
-def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False):
+def int_sel(nuclei, min_int):
+    """
+    Drop lowest intensity nucleus
+    """
+    sel_labels = [n.label for n in nuclei if min_int < n.mean_intensity]
+    nuclei = [n for n in nuclei if n.label in sel_labels]
+    int_ = np.array([n.mean_intensity for n in nuclei])
+    return nuclei, int_
+
+def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False,
+        harsh=True):
     """
     get ratio of nuclei intensities and show which nuclei are being measured
     """
 
-    thresh_r = skimage.filters.threshold_yen(im_r)
-    thresh_g = skimage.filters.threshold_yen(im_g)
+    if harsh:
+        thresh_r = skimage.filters.threshold_yen(im_r)
+        thresh_g = skimage.filters.threshold_yen(im_g)
+        max_nuclei = 6
+    else:
+        thresh_r = skimage.filters.threshold_li(im_r)
+        thresh_g = skimage.filters.threshold_li(im_g)
+        max_nuclei = 30
+
     # Get identical ROI in of both images
     roi = rectangleROI(im_r, thresh_r)
     im_r = im_r[roi]
@@ -138,7 +155,7 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False):
 
     # Nuclei area and intensity bounds
     max_int =  2**cam_bitdepth - 1
-    min_int = min(thresh_r, thresh_g) #* 1.5
+    min_int = min(thresh_r, thresh_g)
     min_size, max_size = 15, 200
 
     markers_r, nuclei_r = label_sizesel(im_r, mask_r, max_int, min_int, min_size, max_size)
@@ -152,48 +169,39 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False):
     int_r = np.array([n.mean_intensity for n in nuclei_r])
     int_g = np.array([n.mean_intensity for n in nuclei_g])
 
-    def int_sel(nuclei, min_int):
-        """
-        Drop lowest intensity nucleus
-        """
-        sel_labels = [n.label for n in nuclei if min_int < n.mean_intensity]
-        nuclei = [n for n in nuclei if n.label in sel_labels]
-        int_ = np.array([n.mean_intensity for n in nuclei])
-        return nuclei, int_
-
 
     # Drop lowest intensity nuclei if the channels don't have the same number
     # Also, if there are more than 10 nuclei, its probably gut granules, increase
     # threshold until they are dropped
-    while len(int_r) != len(int_g) or len(int_r) + len(int_g) > 6:
+    while len(int_r) != len(int_g) or len(int_r) + len(int_g) > max_nuclei:
         if len(nuclei_r) > len(nuclei_g):
             nuclei_r, int_r = int_sel(nuclei_r, np.mean(int_r))
         elif len(nuclei_g) > len(nuclei_r):
             nuclei_g, int_g = int_sel(nuclei_g, np.mean(int_g))
-        elif len(int_r) + len(int_g) > 6:
+        elif len(int_r) + len(int_g) > max_nuclei:
             nuclei_g, int_g = int_sel(nuclei_g, np.mean(int_g))
 
 
     int_ratio = int_g / int_r
 
     # Draw circles around identified nuclei for plotting
-    im_plot_r = circle_nuclei(nuclei_r, im_r)
-    im_plot_g = circle_nuclei(nuclei_g, im_g)
+    im_plot_r = circle_nuclei(nuclei_r, im_r, diam=(10,))
+    im_plot_g = circle_nuclei(nuclei_g, im_g, diam=(10,))
 
     if plot: 
         plot_nuclei_int(im_plot_r, im_plot_g, int_ratio)
 
     return int_ratio, int_r, int_g, im_plot_r, im_plot_g
 
-
-def circle_nuclei(nuclei, im):
+def circle_nuclei(nuclei, im, diam=(10, 12, 14)):
     """
-    Draw circles around identified nuclei for plotting
+    Draw circles around identified segments for plotting
+    Arguments are region props objects, image and circle diameter (more than one
+    draws multiple circles around each centroid)
     """
-
     nuclei_c = [n.centroid for n in nuclei]
     circles = []
-    for d in (10, 12, 14):
+    for d in diam:
         circles += [circle_perimeter(int(r), int(c), d, shape=im.shape) for (r,c) in nuclei_c]
     im_plot = im.copy()
     for circle in circles:
