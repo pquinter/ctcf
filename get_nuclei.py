@@ -109,7 +109,6 @@ def label_sizesel(im, im_mask, max_int, min_int, min_size, max_size):
     nuclei = skimage.measure.regionprops(markers, im)
     # get only markers within area bounds, above intensity thersh and 
     # not oversaturated
-    areas = [n.area for n in nuclei]
     all_labels = np.unique(markers)
     sel_labels = [n.label for n in nuclei if min_size < n.area < max_size \
                     and min_int < n.max_intensity < max_int]
@@ -127,23 +126,23 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False):
     get ratio of nuclei intensities and show which nuclei are being measured
     """
 
-    thresh_r = skimage.filters.threshold_otsu(im_r)
-    thresh_g = skimage.filters.threshold_otsu(im_g)
+    thresh_r = skimage.filters.threshold_yen(im_r)
+    thresh_g = skimage.filters.threshold_yen(im_g)
     # Get identical ROI in of both images
     roi = rectangleROI(im_r, thresh_r)
     im_r = im_r[roi]
     im_g = im_g[roi]
 
-    im1 = mask_image(im_r)
-    im2 = mask_image(im_g)
+    mask_r = mask_image(im_r)
+    mask_g = mask_image(im_g)
 
     # Nuclei area and intensity bounds
     max_int =  2**cam_bitdepth - 1
-    min_int = min(thresh_r, thresh_g) * 2.5
+    min_int = min(thresh_r, thresh_g) #* 1.5
     min_size, max_size = 15, 200
 
-    markers_r, nuclei_r = label_sizesel(im_r, im1, max_int, min_int, min_size, max_size)
-    markers_g, nuclei_g = label_sizesel(im_g, im2, max_int, min_int, min_size, max_size)
+    markers_r, nuclei_r = label_sizesel(im_r, mask_r, max_int, min_int, min_size, max_size)
+    markers_g, nuclei_g = label_sizesel(im_g, mask_g, max_int, min_int, min_size, max_size)
 
     if manual_selection:
         nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(im_r, markers_r, 
@@ -152,6 +151,28 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False):
     # get nuclei intensities
     int_r = np.array([n.mean_intensity for n in nuclei_r])
     int_g = np.array([n.mean_intensity for n in nuclei_g])
+
+    def int_sel(nuclei, min_int):
+        """
+        Drop lowest intensity nucleus
+        """
+        sel_labels = [n.label for n in nuclei if min_int < n.mean_intensity]
+        nuclei = [n for n in nuclei if n.label in sel_labels]
+        int_ = np.array([n.mean_intensity for n in nuclei])
+        return nuclei, int_
+
+
+    # Drop lowest intensity nuclei if the channels don't have the same number
+    # Also, if there are more than 10 nuclei, its probably gut granules, increase
+    # threshold until they are dropped
+    while len(int_r) != len(int_g) or len(int_r) + len(int_g) > 6:
+        if len(nuclei_r) > len(nuclei_g):
+            nuclei_r, int_r = int_sel(nuclei_r, np.mean(int_r))
+        elif len(nuclei_g) > len(nuclei_r):
+            nuclei_g, int_g = int_sel(nuclei_g, np.mean(int_g))
+        elif len(int_r) + len(int_g) > 6:
+            nuclei_g, int_g = int_sel(nuclei_g, np.mean(int_g))
+
 
     int_ratio = int_g / int_r
 
@@ -243,10 +264,7 @@ def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
     return nuclei_r, markers_r, nuclei_g, markers_g
 
 
-%matplotlib
-
 cam_bitdepth = 16
-
 data_dir = '../data/leica_data/' 
 # get directories ignoring hidden files (glob does by default) (i.e. .DS_Store)
 data_dirs = glob.glob(data_dir + '*')
@@ -256,42 +274,30 @@ intensities = pd.DataFrame(columns = data_cols)
 for d in data_dirs:
     im_dirs = glob.glob(d + '/*.tif')
     for im_dir in im_dirs:
-        # process image
+        print('Processing {0}'.format(im_dir))
+        # load image and process
         im_stack = io.imread_collection(im_dir)
         im_g, im_r = split_project(im_stack)
         int_ratio, int_r, int_g, im_plot_r, im_plot_g = nuclei_int(im_g, im_r, plot=0)
-
+        # More than 3 nuclei is a bit suspicious, better take a look
+        if len(int_ratio) > 3:
+            plt.close('all')
+            plot_nuclei_int(im_plot_r, im_plot_g, int_ratio)
+        # fill intensities
         curr_data = pd.DataFrame()
         curr_data['int_r'] = int_r
         curr_data['int_g'] = int_g
         curr_data['int_ratio'] = int_ratio
 
-        # get worm ID info
-        name = im_dir.split('/')[-2:] 
-        curr_data['strain'] = name[0].split('_')[0]
-        curr_data['line'] = name[0].split('_', 1)[-1]
-        curr_data['rep'] = name[1].split('.')[0]
-        print("Processed worm {0} of line {1}".format(rep, strain+line))
+        # fill worm ID info
+        info = im_dir.split('/')[-2:] 
+        curr_data['strain'] = info[0].split('_')[0]
+        curr_data['line'] = info[0].split('_', 1)[-1]
+        curr_data['rep'] = info[1].split('.')[0]
 
-        intensities = pd.concat([intensities, curr_data])
-        break
+        intensities = pd.concat([intensities, curr_data], ignore_index=True)
+        print('Found {0} nuclei'.format(curr_data.shape[0]))
+        print("Processed line {0} image {1}".format(*info))
 
-
-
-
-
-
-int_ratios = []
-im_plots_r = []
-im_plots_g = []
-#gfp, rfp = gfp[1:], rfp[1:]
-for im_num in range(3):
-    im_r = rfp[im_num].copy()
-    im_g = gfp[im_num].copy()
-
-    int_ratio, i1, i2, im_plot_r, im_plot_g = nuclei_int(im_r, im_g, plot=False)
-    int_ratios.append(int_ratio)
-    im_plots_r.append(im_plot_r)
-    im_plots_g.append(im_plot_g)
-
-plot_nuclei_int(im_plot_r[-1], im_plot_g[-1], int_ratio)
+sns.swarmplot(x='strain', y='int_ratio', hue='line', data=intensities)
+sns.swarmplot(x='strain', y='int_g', hue='line', data=intensities)
