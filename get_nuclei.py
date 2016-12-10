@@ -307,5 +307,15 @@ for d in data_dirs:
         print('Found {0} nuclei'.format(curr_data.shape[0]))
         print("Processed line {0} image {1}".format(*info))
 
-sns.swarmplot(x='strain', y='int_ratio', hue='line', data=intensities)
-sns.swarmplot(x='strain', y='int_g', hue='line', data=intensities)
+sns.swarmplot(x='strain', y='int_ratio', data=intensities, alpha=0.5)
+#sns.swarmplot(x='strain', y='int_g', hue='line', data=intensities)
+medianprops = dict(linewidth=4, color='firebrick')
+sns.boxplot(x='strain', y='int_ratio', data=intensities,
+        showcaps=False, boxprops={'facecolor':'None'}, showfliers=False,
+        whiskerprops={'linewidth':0}, showbox=False, notch=True,
+        medianprops=medianprops)
+plt.xticks(np.arange(4),['CTCF (+)\nnative binding site',
+    'CTCF (+)\nmutated binding site','CTCF (-)\nnative binding site',
+    'CTCF (-)\nmutated binding site'], rotation=45)
+plt.ylabel('Intensity ratio (GFP/RFP)')
+plt.tight_layout()
