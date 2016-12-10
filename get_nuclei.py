@@ -122,7 +122,7 @@ def label_sizesel(im, im_mask, max_int, min_int, min_size, max_size):
 
     return markers, nuclei
 
-def nuclei_int(im_r, im_g, plot=False, min_distance=10, manual_selection=False):
+def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False):
     """
     get ratio of nuclei intensities and show which nuclei are being measured
     """
@@ -139,7 +139,7 @@ def nuclei_int(im_r, im_g, plot=False, min_distance=10, manual_selection=False):
 
     # Nuclei area and intensity bounds
     max_int =  2**cam_bitdepth - 1
-    min_int = min(thresh_r, thresh_g) * 2
+    min_int = min(thresh_r, thresh_g) * 2.5
     min_size, max_size = 15, 200
 
     markers_r, nuclei_r = label_sizesel(im_r, im1, max_int, min_int, min_size, max_size)
@@ -248,17 +248,38 @@ def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
 cam_bitdepth = 16
 
 data_dir = '../data/leica_data/' 
-# get directories ignoring hidden files by default (i.e. .DS_Store)
-data_dir = glob.glob(data_dir + '*')
+# get directories ignoring hidden files (glob does by default) (i.e. .DS_Store)
+data_dirs = glob.glob(data_dir + '*')
 strains = [s.split('/')[-1] for s in data_dir]
+data_cols = ['strain','line','rep', 'int_ratio','int_r', 'int_g']
+intensities = pd.DataFrame(columns = data_cols)
+for d in data_dirs:
+    im_dirs = glob.glob(d + '/*.tif')
+    for im_dir in im_dirs:
+        # process image
+        im_stack = io.imread_collection(im_dir)
+        im_g, im_r = split_project(im_stack)
+        int_ratio, int_r, int_g, im_plot_r, im_plot_g = nuclei_int(im_g, im_r, plot=0)
 
-for d in data_dir:
-    im_dir = glob.glob(d + '*.tif')
-    break
-    for im_dir in 
+        curr_data = pd.DataFrame()
+        curr_data['int_r'] = int_r
+        curr_data['int_g'] = int_g
+        curr_data['int_ratio'] = int_ratio
 
-gfp = io.imread_collection(gfp_fname)
-rfp = io.imread_collection(rfp_fname)
+        # get worm ID info
+        name = im_dir.split('/')[-2:] 
+        curr_data['strain'] = name[0].split('_')[0]
+        curr_data['line'] = name[0].split('_', 1)[-1]
+        curr_data['rep'] = name[1].split('.')[0]
+        print("Processed worm {0} of line {1}".format(rep, strain+line))
+
+        intensities = pd.concat([intensities, curr_data])
+        break
+
+
+
+
+
 
 int_ratios = []
 im_plots_r = []
