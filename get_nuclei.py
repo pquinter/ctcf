@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 import seaborn as sns
+sns.set(font_scale=2)
 sns.set_style('white')
 
 import pandas as pd
@@ -307,15 +308,28 @@ for d in data_dirs:
         print('Found {0} nuclei'.format(curr_data.shape[0]))
         print("Processed line {0} image {1}".format(*info))
 
-sns.swarmplot(x='strain', y='int_ratio', data=intensities, alpha=0.5)
-#sns.swarmplot(x='strain', y='int_g', hue='line', data=intensities)
-medianprops = dict(linewidth=4, color='firebrick')
-sns.boxplot(x='strain', y='int_ratio', data=intensities,
-        showcaps=False, boxprops={'facecolor':'None'}, showfliers=False,
-        whiskerprops={'linewidth':0}, showbox=False, notch=True,
-        medianprops=medianprops)
-plt.xticks(np.arange(4),['CTCF (+)\nnative binding site',
-    'CTCF (+)\nmutated binding site','CTCF (-)\nnative binding site',
-    'CTCF (-)\nmutated binding site'], rotation=45)
-plt.ylabel('Intensity ratio (GFP/RFP)')
-plt.tight_layout()
+def plot_intensities(intensities, to_plot='int_ratio',
+        ylabel='Intensity ratio\n (GFP/RFP)', yscale=None, save=False):
+    plt.close('all')
+    sns.swarmplot(x='strain', y=to_plot, data=intensities, alpha=0.5, size=6)
+    #sns.swarmplot(x='strain', y='int_g', hue='line', data=intensities)
+    medianprops = dict(linewidth=2, color='black')
+    sns.boxplot(x='strain', y=to_plot, data=intensities,
+            showcaps=False, boxprops={'facecolor':'None'}, showfliers=False,
+            whiskerprops={'linewidth':0}, showbox=False, notch=True,
+            medianprops=medianprops)
+    plt.xticks(np.arange(4),['CTCF (+)\nnative binding site',
+        'CTCF (+)\nmutated binding site','CTCF (-)\nnative binding site',
+        'CTCF (-)\nmutated binding site'], rotation=45)
+    plt.ylabel(ylabel)
+    if yscale: plt.yscale(yscale)
+    plt.tight_layout()
+    sns.despine()
+    if save: plt.savefig('./output/'+to_plot+'.pdf')
+    return None
+
+%matplotlib
+intensities = pd.read_csv('./output/intensities.csv')
+plot_intensities(intensities, save=True)
+plot_intensities(intensities, to_plot='int_r', ylabel='RFP intensity (a.u.)', yscale='log', save=True)
+plot_intensities(intensities, to_plot='int_g', ylabel='GFP intensity (a.u.)', yscale='log', save=True)
