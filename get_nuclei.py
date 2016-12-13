@@ -23,16 +23,17 @@ from scipy.spatial.distance import pdist, squareform
 import matplotlib.gridspec as gridspec
 from scipy.spatial import cKDTree
 
-
-def split_project(stack):
+min_size=15
+def split_project(im_col):
     """
     Split stack by channels and z-project each channel
     """
-    stack = np.copy(stack)
-    num = len(stack)
-    # gfp channel is images with even index, rfp is odd
-    gfp = stack[np.arange(0, num, 2)]
-    rfp = stack[np.arange(1, num, 2)]
+    # convert image collection to numpy array
+    stack = np.copy(im_col)
+    num = len(stack)/2
+    # gfp channel first half, rfp second
+    gfp = stack[:num]
+    rfp = stack[num:]
     gfp = z_project(gfp)
     rfp = z_project(rfp)
     return gfp, rfp
@@ -51,7 +52,7 @@ def plot_gallery(images, n_row=3, n_col=4, fig_title=None):
     fig = plt.figure(figsize=(1.8 * n_col, 2.4 * n_row))
     for i in range(n_row * n_col):
         ax = fig.add_subplot(n_row, n_col, i + 1)
-        ax.imshow(images[i], cmap=plt.cm.gray)
+        ax.imshow(images[i], cmap=plt.cm.viridis)
         plt.xticks(())
         plt.yticks(())
     if fig_title: fig.suptitle(fig_title+'\n', fontsize=20)
@@ -81,11 +82,21 @@ def im_hist(im):
         plt.yscale('log')
         plt.xlabel('normalized pixel value')
         plt.ylabel('count')
+    return None
 
 def rectangleROI(im, thresh=None):
     """
     Identify coordinates of rectangular ROI in an image with mostly dark irrelevant pixels
-    ROI does not contain all continuous zero columns and rows after threshold
+    The returned ROI excludes all continuous zero columns and rows after thresholding
+
+    Arguments
+    ---------
+    im: input image
+
+    Returns
+    ---------
+    roi_coords: slice object containing roi coordinates. 
+                Can be directly used as numpy slice: im[roi_coords]
     """
     if not thresh:
         thresh = skimage.filters.threshold_li(im)
@@ -101,17 +112,29 @@ def rectangleROI(im, thresh=None):
     roi_coords = (slice(min(rows),max(rows)+1), slice(min(cols),max(cols)+1))
     return roi_coords
 
-def label_sizesel(im, im_mask, max_int, min_int, min_size, max_size):
+def label_sizesel(im, im_mask, max_int, min_int, minor_ax_lim, major_ax_lim, max_area):
     """
     Create and label markers from image mask, 
     filter by area and compute region properties
+
+    Arguments
+    ---------
+    im: input image
+
+    Returns
+    ---------
+    markers: labeled image, where each object has unique value and background is 0
+    nuclei: list of region properties of each labeled object
+ 
     """
     markers = morphology.label(im_mask)
     nuclei = skimage.measure.regionprops(markers, im)
     # get only markers within area bounds, above intensity thersh and 
     # not oversaturated
     all_labels = np.unique(markers)
-    sel_labels = [n.label for n in nuclei if min_size < n.area < max_size \
+    sel_labels = [n.label for n in nuclei if n.minor_axis_length > minor_ax_lim
+                    and n.major_axis_length < major_ax_lim \
+                    and n.area < max_area \
                     and min_int < n.max_intensity < max_int]
     rem_labels = [l for l in all_labels if l not in sel_labels]
     # remove unselected markers
@@ -124,7 +147,18 @@ def label_sizesel(im, im_mask, max_int, min_int, min_size, max_size):
 
 def int_sel(nuclei, min_int):
     """
-    Drop lowest intensity nucleus
+    Drop nuclei by intensity threshold
+
+    Arguments
+    ---------
+    nuclei: list of region properties of each labeled object
+    min_int: minimum intensity threshold
+
+    Returns
+    ---------
+    markers: labeled image, where each object has unique value and background is 0
+    nuclei: list of region properties of each labeled object
+
     """
     sel_labels = [n.label for n in nuclei if min_int < n.mean_intensity]
     nuclei = [n for n in nuclei if n.label in sel_labels]
@@ -138,14 +172,12 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False,
     """
 
     if harsh:
-        thresh_r = skimage.filters.threshold_yen(im_r)
-        thresh_g = skimage.filters.threshold_yen(im_g)
         max_nuclei = 6
     else:
-        thresh_r = skimage.filters.threshold_li(im_r)
-        thresh_g = skimage.filters.threshold_li(im_g)
-        max_nuclei = 30
+        max_nuclei = 16
 
+    thresh_r = skimage.filters.threshold_yen(im_r)
+    thresh_g = skimage.filters.threshold_yen(im_g)
     # Get identical ROI in of both images
     roi = rectangleROI(im_r, thresh_r)
     im_r = im_r[roi]
@@ -157,10 +189,10 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False,
     # Nuclei area and intensity bounds
     max_int =  2**cam_bitdepth - 1
     min_int = min(thresh_r, thresh_g)
-    min_size, max_size = 15, 200
+    minor_ax_lim, major_ax_lim, max_area = 5, 30, 200
 
-    markers_r, nuclei_r = label_sizesel(im_r, mask_r, max_int, min_int, min_size, max_size)
-    markers_g, nuclei_g = label_sizesel(im_g, mask_g, max_int, min_int, min_size, max_size)
+    markers_r, nuclei_r = label_sizesel(im_r, mask_r, max_int, min_int, minor_ax_lim, major_ax_lim, max_area)
+    markers_g, nuclei_g = label_sizesel(im_g, mask_g, max_int, min_int, minor_ax_lim, major_ax_lim, max_area)
 
     if manual_selection:
         nuclei_r, markers_r, nuclei_g, markers_g = manual_sel(im_r, markers_r, 
@@ -182,7 +214,6 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False,
         elif len(int_r) + len(int_g) > max_nuclei:
             nuclei_g, int_g = int_sel(nuclei_g, np.mean(int_g))
 
-
     int_ratio = int_g / int_r
 
     # Draw circles around identified nuclei for plotting
@@ -199,6 +230,18 @@ def circle_nuclei(nuclei, im, diam=(10, 12, 14)):
     Draw circles around identified segments for plotting
     Arguments are region props objects, image and circle diameter (more than one
     draws multiple circles around each centroid)
+
+    Arguments
+    ---------
+    nuclei: list of region properties of each labeled object
+    im: corresponding image
+    diam: diameter of circles to be drawn around each object; also determines
+            the number of circles.
+
+    Returns
+    ---------
+    im_plot: copy of the image with circles around each object
+ 
     """
     nuclei_c = [n.centroid for n in nuclei]
     circles = []
@@ -210,6 +253,9 @@ def circle_nuclei(nuclei, im, diam=(10, 12, 14)):
     return im_plot
 
 def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
+    """
+    Plot two channels and intensity ratio side by side
+    """
     gs = gridspec.GridSpec(1, 7)
     ax1 = plt.subplot(gs[0:3])
     ax2 = plt.subplot(gs[3:6])
@@ -219,15 +265,22 @@ def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
     ax2.imshow(im_plot_g, plt.cm.viridis)
     ax2.set_title('green channel nuclei', fontsize=20)
     sns.stripplot(int_ratio, orient='v', size=10, alpha=0.5, cmap='viridis', ax=ax3)
-    #ax2.tick_params(axis='y', which='both', labelleft='off', labelright='on')
     ax3.set_ylabel('intensity ratio (gfp/rfp)', fontsize=20)
-    #ax2.yaxis.set_label_position("right")
     plt.tight_layout()
     return None
 
 def mask_image(im):
     """
-    Create a binary mask to segment nuclei
+    Create a binary mask to segment nuclei using adaptive threshold
+
+    Arguments
+    ---------
+    im: input image
+
+    Returns
+    ---------
+    im_thresh: thresholded binary image 
+ 
     """
     im_thresh = threshold_adaptive(im, 15)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
@@ -237,7 +290,7 @@ def mask_image(im):
 
 def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
     """
-    Manual (click) selection of nuclei
+    Manual (click) confirmatory selection of nuclei
     """
     coords_rg = []
     for i in (1,3):
@@ -269,7 +322,6 @@ def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
     markers_r, nuclei_r = update_sel(markers_r, nuclei_r, coords_r)
     markers_g, nuclei_g = update_sel(markers_g, nuclei_g, coords_g)
 
-
     return nuclei_r, markers_r, nuclei_g, markers_g
 
 
@@ -287,11 +339,11 @@ for d in data_dirs:
         # load image and process
         im_stack = io.imread_collection(im_dir)
         im_g, im_r = split_project(im_stack)
-        int_ratio, int_r, int_g, im_plot_r, im_plot_g = nuclei_int(im_g, im_r, plot=0)
+        int_ratio, int_r, int_g, im_plot_r, im_plot_g = nuclei_int(im_g, im_r, plot=0, harsh=False)
         # More than 3 nuclei is a bit suspicious, better take a look
-        if len(int_ratio) > 3:
-            plt.close('all')
-            plot_nuclei_int(im_plot_r, im_plot_g, int_ratio)
+        #if len(int_ratio) > 3:
+        #    plt.close('all')
+        #    plot_nuclei_int(im_plot_r, im_plot_g, int_ratio)
         # fill intensities
         curr_data = pd.DataFrame()
         curr_data['int_r'] = int_r
@@ -310,7 +362,7 @@ for d in data_dirs:
 
 def plot_intensities(intensities, to_plot='int_ratio',
         ylabel='Intensity ratio\n (GFP/RFP)', yscale=None, save=False):
-    plt.close('all')
+    plt.figure()
     sns.swarmplot(x='strain', y=to_plot, data=intensities, alpha=0.5, size=6)
     #sns.swarmplot(x='strain', y='int_g', hue='line', data=intensities)
     medianprops = dict(linewidth=2, color='black')
@@ -328,8 +380,7 @@ def plot_intensities(intensities, to_plot='int_ratio',
     if save: plt.savefig('./output/'+to_plot+'.pdf')
     return None
 
-%matplotlib
-intensities = pd.read_csv('./output/intensities.csv')
+#intensities = pd.read_csv('./output/intensities.csv', comment='#')
 plot_intensities(intensities, save=True)
-plot_intensities(intensities, to_plot='int_r', ylabel='RFP intensity (a.u.)', yscale='log', save=True)
-plot_intensities(intensities, to_plot='int_g', ylabel='GFP intensity (a.u.)', yscale='log', save=True)
+plot_intensities(intensities, to_plot='int_r', ylabel='RFP', yscale='log', save=True)
+plot_intensities(intensities, to_plot='int_g', ylabel='GFP', yscale='log', save=True)
