@@ -219,6 +219,7 @@ def nuclei_int(im_g, im_r, plot=False, min_distance=10, manual_selection=False,
     # Draw circles around identified nuclei for plotting
     im_plot_r = circle_nuclei(nuclei_r, im_r, diam=(10,))
     im_plot_g = circle_nuclei(nuclei_g, im_g, diam=(10,))
+    io.imshow(im_plot_r)
 
     if plot: 
         plot_nuclei_int(im_plot_r, im_plot_g, int_ratio)
@@ -340,6 +341,8 @@ for d in data_dirs:
         im_stack = io.imread_collection(im_dir)
         im_g, im_r = split_project(im_stack)
         int_ratio, int_r, int_g, im_plot_r, im_plot_g = nuclei_int(im_g, im_r, plot=0, harsh=False)
+        break
+    break
         # More than 3 nuclei is a bit suspicious, better take a look
         #if len(int_ratio) > 3:
         #    plt.close('all')
@@ -384,3 +387,23 @@ def plot_intensities(intensities, to_plot='int_ratio',
 plot_intensities(intensities, save=True)
 plot_intensities(intensities, to_plot='int_r', ylabel='RFP', yscale='log', save=True)
 plot_intensities(intensities, to_plot='int_g', ylabel='GFP', yscale='log', save=True)
+
+# example dataframe of region props
+nuclei_df = pd.DataFrame()
+areas_ = [n.area for n in nuclei_r]
+perims_ = [n.perimeter for n in nuclei_r]
+intensity_ = [n.mean_intensity for n in nuclei_r]
+nuclei_df['intensity'] = intensity_
+nuclei_df['area'] = areas_
+nuclei_df['perimeter'] = perims_
+nuclei_df = pd.melt(nuclei_df)
+fig, axes = plt.subplots(1,3)
+sns.swarmplot(x='variable', y='value', data=nuclei_df[nuclei_df['variable']=='intensity'], alpha=0.5, size=15, ax=axes[0])
+sns.swarmplot(x='variable', y='value', data=nuclei_df[nuclei_df['variable']=='area'], alpha=0.5, size=15, ax=axes[1])
+sns.swarmplot(x='variable', y='value', data=nuclei_df[nuclei_df['variable']=='perimeter'], alpha=0.5, size=15, ax=axes[2])
+for ax in axes: 
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+sns.despine()
+plt.tight_layout()
+plt.savefig()
