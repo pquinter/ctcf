@@ -1,1 +1,1 @@
-#Image analysis of fluorescent pharyngeal nuclei
+#Image analysis of fluorescent C. elegans nuclei
