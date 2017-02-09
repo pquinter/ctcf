@@ -1,1 +1,1 @@
-#Image analysis of fluorescent C. elegans nuclei
+# Python utilities

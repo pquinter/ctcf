@@ -383,4 +383,32 @@ def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
 
     return nuclei_r, markers_r, nuclei_g, markers_g
 
+def clickselect_plot(event, selected, axes):
+    """
+    Event handler for button_press_event.
+    Save index of image clicked on, useful to view multiple images in 
+    subplots, and select which ones to keep.
 
+    Has to be called as follows: 
+    cid = fig.canvas.mpl_connect('button_press_event', 
+                    lambda event: onclick(event, selected, axes))
+
+    Arguments
+    ---------
+    event: matplotlib event 
+        from fig.canvas.mpl_connect('button_press_event', onclick)
+    selected: empty set
+        store unique indices of clicked images
+
+    Returns
+    ---------
+    None
+        Adds indices to selected in place
+    """
+    for i, ax in enumerate(axes):
+        if ax == event.inaxes:
+            # Print which image is selected
+            ax.set_title('Image selected')
+            # update plot and save selection
+            fig.canvas.draw()
+            selected.add(i)
