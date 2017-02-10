@@ -485,7 +485,8 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100):
         if n>limit: break
     return im_selection
 
-def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False):
+def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False, 
+        overlay=0.7):
     """
     Helper function to plot a gallery of images stored in dictionary 
     (output from mult_im_selection function)
@@ -501,6 +502,8 @@ def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False):
             optional figure title
     sort: boolean
             whether to plot images sorted by key
+    overlay: float
+            alpha value for GFP channel (0-1). If 1, then completely hide DIC
 
     Returns
     ---------
@@ -518,7 +521,7 @@ def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False):
             ax = fig.add_subplot(n_row, n_col, i)
             # Plot DIC and overlay GFP
             ax.imshow(dic)
-            ax.imshow(gfp, alpha=0.7, cmap=plt.cm.viridis)
+            ax.imshow(gfp, alpha=overlay, cmap=plt.cm.viridis)
             ax.set_title(sample)
             plt.xticks(())
             plt.yticks(())
