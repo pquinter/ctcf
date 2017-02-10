@@ -384,7 +384,7 @@ def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
 
     return nuclei_r, markers_r, nuclei_g, markers_g
 
-def clickselect_plot(event, selected, fig, axes):
+def clickselect_plot(event, selected, fig, axes, heart=True):
     """
     Event handler for button_press_event.
     Save index of image clicked on, useful to view multiple images in 
@@ -400,6 +400,10 @@ def clickselect_plot(event, selected, fig, axes):
         from fig.canvas.mpl_connect('button_press_event', onclick)
     selected: empty set
         store unique indices of clicked images
+    figure: matplotlib figure
+        figure containing axis to click on 
+    ax: matplotlib axis
+        axis to click on
 
     Returns
     ---------
@@ -408,13 +412,41 @@ def clickselect_plot(event, selected, fig, axes):
     """
     for i, ax in enumerate(axes):
         if ax == event.inaxes:
-            # Print which image is selected
-            ax.set_title('Image selected')
+            # Show which image is selected
+            ax.set_title('Liked!')
+            if heart:
+                draw_heart(ax)
             # update plot and save selection
             fig.canvas.draw()
             selected.add(i)
 
-def mult_im_selection(data_dir, project='max', ext='.tif', limit=100):
+def draw_heart(ax):
+    """
+    Draw a red heart on ax. Not working...yet
+
+    Arguments
+    ---------
+    ax: matplotlib axis
+        axis to draw heart on 
+
+    Returns
+    ---------
+    None
+        Just plots heart for image selection tool (click_select_plot)
+    """
+
+    x_lim = ax.get_xlim()
+    y_lim = ax.get_ylim()
+    xheart = np.mean(x_lim)
+    yheart = np.mean(y_lim)
+    t = np.linspace(0, 2 * np.pi, 200)
+    x = -10*(16 * np.sin(t)**3) + xheart
+    y = -10*(13 * np.cos(t) - 5 * np.cos(2 * t) - 2 * np.cos(3 * t) - np.cos(4 * t)) + yheart
+    ax.plot(x, y, 'r-', lw=10, alpha=0.5)
+    ax.set_xlim(x_lim)
+    ax.set_ylim(y_lim)
+
+def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, heart=True):
     """
     Widget for image selection, z_projection, ROI cropping, and DIC-GFP overlay 
     from multiple samples stored in different directories.
@@ -469,14 +501,16 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100):
             # Plot DIC and overlay GFP
             ax.imshow(dic)
             ax.imshow(gfp, alpha=0.7, cmap=plt.cm.viridis)
+            ax.set_xticks([])
+            ax.set_yticks([])
 
         # set to store indices of selected images
         selected = set()
         # select images by clicking on them
         cid = fig.canvas.mpl_connect('button_press_event', 
-                        lambda event: clickselect_plot(event, selected, fig, np.ravel(axes)))
+                        lambda event: clickselect_plot(event, selected, fig, np.ravel(axes), heart))
         # Stop after 100 clicks or until the user is done
-        fig.suptitle('Click on images to keep and press Alt+click when done', fontsize=20)
+        fig.suptitle('Click on images you like and press right click (Alt+click) when done', fontsize=20)
         plt.ginput(100, timeout=0, show_clicks=True)
         fig.canvas.mpl_disconnect(cid)
         plt.close('all')
