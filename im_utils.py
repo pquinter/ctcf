@@ -391,7 +391,7 @@ def clickselect_plot(event, selected, axes):
 
     Has to be called as follows: 
     cid = fig.canvas.mpl_connect('button_press_event', 
-                    lambda event: onclick(event, selected, axes))
+                    lambda event: clickselect_plot(event, selected, axes))
 
     Arguments
     ---------
@@ -412,3 +412,111 @@ def clickselect_plot(event, selected, axes):
             # update plot and save selection
             fig.canvas.draw()
             selected.add(i)
+
+def mult_im_selection(data_dir, project='max', ext='.tif', limit=100):
+    """
+    Widget for image selection, z_projection, ROI cropping, and DIC-GFP overlay 
+    from multiple samples stored in different directories.
+    Shows images from nested directories sequentially, and allows user to click
+    on those to keep.
+
+    Arguments
+    ---------
+    datadir: string
+        parent directory containing image folders
+    ext: string
+        extension of image files to look for 
+    limit: integer
+        upper limit of the number of directories to look at 
+
+    Returns
+    ---------
+    im_selection: dictionary
+        Dictionary with selected images and respective directory name
+
+    """
+    data_dirs = glob.glob(data_dir + '*')
+    # dictionary to store sample name and selected images as key:values
+    all_im = {}
+    im_selection = {}
+    # counter to limit number of dictionaries
+    n=1
+    # show images by directory/strain
+    for d in data_dirs:
+        im_dirs = glob.glob(d + '/*' + ext)
+        try:
+            fig, axes = plt.subplots(3, int(len(im_dirs)/3))
+        except IndexError:
+            fig, axes = plt.subplots(len(im_dirs))
+        # get strain number
+        strain = int(d.split('/')[-1].split('_')[0])
+        curr_ims = []
+        for (im_dir, ax) in zip(im_dirs, np.ravel(axes)):
+            # load image
+            im_stack = io.imread_collection(im_dir)
+            # Get channels, DIC is always first array
+            dic = im_stack[0]
+            gfp = im_stack[1:]
+            # Project gfp based on maximum value
+            gfp = z_project(gfp, project=project)
+            # Crop image based on gfp channel
+            roi = rectangleROI(gfp)
+            dic = dic[roi]
+            gfp = gfp[roi]
+            # save it for later, DIC goes first
+            curr_ims.append((dic, gfp))
+            # Plot DIC and overlay GFP
+            ax.imshow(dic)
+            ax.imshow(gfp, alpha=0.7, cmap=plt.cm.viridis)
+
+        # set to store indices of selected images
+        selected = set()
+        # select images by clicking on them
+        cid = fig.canvas.mpl_connect('button_press_event', 
+                        lambda event: clickselect_plot(event, selected, np.ravel(axes)))
+        # Stop after 100 clicks or until the user is done
+        fig.suptitle('Click on images to keep and press Alt+click when done', fontsize=20)
+        plt.ginput(100, timeout=0, show_clicks=True)
+        fig.canvas.mpl_disconnect(cid)
+        plt.close('all')
+        im_selection[strain] = [im for (i, im) in enumerate(curr_ims) if i in selected]
+        n+=1
+        if n>limit: break
+    return im_selection
+
+def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None):
+    """
+    Helper function to plot a gallery of images stored in dictionary 
+    (output from mult_im_selection function)
+
+    Arguments
+    ---------
+    im_dict: dictionary
+            Dictionary with images to plot. Values must be pairs of (DIC, GFP)
+    n_row, n_col: integer
+            number of rows and columns in plot
+            If less than number of images, truncates to plot n_row * n_col
+    fig_title: string
+            optional figure title
+
+    Returns
+    ---------
+    None (only plots gallery)
+    """
+
+    fig = plt.figure(figsize=(1.8 * n_col, 2.4 * n_row))
+    # counter to add axes
+    j=1
+    for sample in im_dict:
+        for (i, im) in enumerate(im_dict[sample], start=j):
+            dic, gfp = im
+            ax = fig.add_subplot(n_row, n_col, i)
+            # Plot DIC and overlay GFP
+            ax.imshow(dic)
+            ax.imshow(gfp, alpha=0.7, cmap=plt.cm.viridis)
+            ax.set_title(sample)
+            plt.xticks(())
+            plt.yticks(())
+            j+=1
+    if fig_title: fig.suptitle(fig_title+'\n', fontsize=20)
+    plt.tight_layout()
