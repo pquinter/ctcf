@@ -5,6 +5,7 @@ Author: Porfirio Quintero-Cadena
 """
 
 from matplotlib import pyplot as plt
+import matplotlib.gridspec as gridspec
 import seaborn as sns
 sns.set(font_scale=2)
 sns.set_style('white')
@@ -13,6 +14,7 @@ import pandas as pd
 import numpy as np
 
 import warnings
+import glob
 
 import skimage
 from skimage import io, morphology
@@ -20,7 +22,6 @@ from skimage.filters import threshold_adaptive
 from skimage.draw import circle_perimeter
 from scipy import ndimage
 
-import matplotlib.gridspec as gridspec
 
 def split_project(im_col):
     """
@@ -383,7 +384,7 @@ def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
 
     return nuclei_r, markers_r, nuclei_g, markers_g
 
-def clickselect_plot(event, selected, axes):
+def clickselect_plot(event, selected, fig, axes):
     """
     Event handler for button_press_event.
     Save index of image clicked on, useful to view multiple images in 
@@ -391,7 +392,7 @@ def clickselect_plot(event, selected, axes):
 
     Has to be called as follows: 
     cid = fig.canvas.mpl_connect('button_press_event', 
-                    lambda event: clickselect_plot(event, selected, axes))
+                    lambda event: clickselect_plot(event, selected, fig, axes))
 
     Arguments
     ---------
@@ -473,7 +474,7 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100):
         selected = set()
         # select images by clicking on them
         cid = fig.canvas.mpl_connect('button_press_event', 
-                        lambda event: clickselect_plot(event, selected, np.ravel(axes)))
+                        lambda event: clickselect_plot(event, selected, fig, np.ravel(axes)))
         # Stop after 100 clicks or until the user is done
         fig.suptitle('Click on images to keep and press Alt+click when done', fontsize=20)
         plt.ginput(100, timeout=0, show_clicks=True)
