@@ -485,7 +485,7 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100):
         if n>limit: break
     return im_selection
 
-def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None):
+def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False):
     """
     Helper function to plot a gallery of images stored in dictionary 
     (output from mult_im_selection function)
@@ -499,6 +499,8 @@ def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None):
             If less than number of images, truncates to plot n_row * n_col
     fig_title: string
             optional figure title
+    sort: boolean
+            whether to plot images sorted by key
 
     Returns
     ---------
@@ -508,7 +510,9 @@ def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None):
     fig = plt.figure(figsize=(1.8 * n_col, 2.4 * n_row))
     # counter to add axes
     j=1
-    for sample in im_dict:
+    if sort: keys = sorted(im_dict)
+    else: keys = im_dict.keys()
+    for sample in keys:
         for (i, im) in enumerate(im_dict[sample], start=j):
             dic, gfp = im
             ax = fig.add_subplot(n_row, n_col, i)
