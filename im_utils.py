@@ -15,6 +15,7 @@ import numpy as np
 
 import warnings
 import glob
+import os
 
 import skimage
 from skimage import io, morphology
@@ -422,7 +423,7 @@ def clickselect_plot(event, selected, fig, axes, heart=True):
 
 def draw_heart(ax):
     """
-    Draw a red heart on ax. Not working...yet
+    Draw a red heart on ax.
 
     Arguments
     ---------
@@ -446,7 +447,88 @@ def draw_heart(ax):
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
 
-def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, heart=True):
+def burn_scale_bar(im, width=6, white=True, zoom=40):
+    """
+    Burn a horizontal scale bar
+    Default settings are for Leica microscope (Ca+2 imaging)
+    Use interpixel_dist function to compute interpixel distance for other setup
+
+    Arguments
+    ---------
+    im: array_like
+        image to copy and draw scale bar on
+    width: int
+        width of the scale bar
+    white: boolean
+        color of scale bar (maximum or minimum)
+    zoom: int
+        Lens used on Leica microscope (20, 40 or 63x)
+
+    Returns
+    --------
+    im_out: array_like
+        copy of im with scale bar
+    """
+    # Modify a copy of the image just in case
+    im_out = im.copy()
+    # Position of scale bar (top left corner)
+    j_pos = legend_x = im.shape[1]*0.08
+    i_pos = im.shape[0] * 0.9
+    # Position of scale bar length label (above bar)
+    legend_y = im.shape[0]*0.88
+
+    if zoom == 10:
+        # 100 microns with leica 20x lens
+        length = 75
+        legend = '100'
+
+    if zoom == 20:
+        # 50 microns with leica 20x lens
+        length = 70
+        legend = '50'
+    elif zoom == 40:
+        # 20 microns long Leica 40x lens
+        length = 56
+        legend = '20'
+    elif zoom == 63:
+        # 10 microns with Leica 63x lens
+        length = 40
+        legend = '10'
+
+    if white:
+        pixel_val = np.max(im)
+    else:
+        pixel_val = skimage.dtype_limits(im)[0]
+
+    im_out[i_pos-(width//2):i_pos+(width//2), j_pos:j_pos+length] = pixel_val
+    return im_out, (legend_x, legend_y, legend)
+
+def interpixel_dist(im, ref_length):
+    """
+    Compute interpixel distance by measuring an object of known length.
+    Prompts the image and allows the user to click on the two ends.
+
+    Arguments
+    ---------
+    im: array_like
+        image with reference object
+    ref_length: int or float
+        length of the object
+
+    Returns
+    ---------
+    interpixel_distance: float
+        interpixel distance in units of reference length 
+                            (e.g. 50um for a C. elegans egg)
+    """
+    io.imshow(im)
+    xy = plt.ginput(2)
+    feature_length = np.sqrt((xy[1][1] - xy[0][1])**2 + (xy[1][0] - xy[0][0])**2)
+    interpixel_distance = feature_length / ref_length
+    return interpixel_distance
+
+def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, 
+        heart=True, save=False, crop_roi='gfp'):
     """
     Widget for image selection, z_projection, ROI cropping, and DIC-GFP overlay 
     from multiple samples stored in different directories.
@@ -461,12 +543,17 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, heart=True
         extension of image files to look for 
     limit: integer
         upper limit of the number of directories to look at 
+    heart: boolean
+        whether to draw a heart on liked images
+    save: boolean
+        whether to save selected images to disk
+    crop_roi: string or False
+        whether to find rectangular ROI using dic, gfp, or nothing
 
     Returns
     ---------
     im_selection: dictionary
         Dictionary with selected images and respective directory name
-
     """
     data_dirs = glob.glob(data_dir + '*')
     # dictionary to store sample name and selected images as key:values
@@ -474,8 +561,10 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, heart=True
     im_selection = {}
     # counter to limit number of dictionaries
     n=1
+
     # show images by directory/strain
     for d in data_dirs:
+
         im_dirs = glob.glob(d + '/*' + ext)
         try:
             fig, axes = plt.subplots(3, int(len(im_dirs)/3))
@@ -484,7 +573,14 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, heart=True
         # get strain number
         strain = int(d.split('/')[-1].split('_')[0])
         curr_ims = []
+
         for (im_dir, ax) in zip(im_dirs, np.ravel(axes)):
+            # get image name
+            im_name = im_dir.split('/')[-1]
+            # get zoom, if encoded in image name
+            if 'x' in im_name:
+                zoom = int(im_name.split('_')[-1].split('x')[0])
+            else: zoom = 40
             # load image
             im_stack = io.imread_collection(im_dir)
             # Get channels, DIC is always first array
@@ -492,15 +588,20 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, heart=True
             gfp = im_stack[1:]
             # Project gfp based on maximum value
             gfp = z_project(gfp, project=project)
-            # Crop image based on gfp channel
-            roi = rectangleROI(gfp)
-            dic = dic[roi]
-            gfp = gfp[roi]
+            # Find and crop ROI
+            if crop_roi == 'gfp':
+                roi = rectangleROI(gfp)
+            elif crop_roi == 'dic':
+                roi = rectangleROI(dic)
+            if crop_roi:
+                dic = dic[roi]
+                gfp = gfp[roi]
             # save it for later, DIC goes first
-            curr_ims.append((dic, gfp))
+            curr_ims.append((dic, gfp, zoom))
             # Plot DIC and overlay GFP
             ax.imshow(dic)
             ax.imshow(gfp, alpha=0.7, cmap=plt.cm.viridis)
+            ax.set_title(im_name)
             ax.set_xticks([])
             ax.set_yticks([])
 
@@ -510,17 +611,29 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, heart=True
         cid = fig.canvas.mpl_connect('button_press_event', 
                         lambda event: clickselect_plot(event, selected, fig, np.ravel(axes), heart))
         # Stop after 100 clicks or until the user is done
-        fig.suptitle('Click on images you like and press right click (Alt+click) when done', fontsize=20)
+        fig.suptitle('Click to like, right click (Alt+click) when done\nsample:{}\n'.format(strain), fontsize=15)
+        plt.tight_layout()
         plt.ginput(100, timeout=0, show_clicks=True)
         fig.canvas.mpl_disconnect(cid)
         plt.close('all')
         im_selection[strain] = [im for (i, im) in enumerate(curr_ims) if i in selected]
         n+=1
         if n>limit: break
+
+    if save:
+        save_dir = './favorite_worms/'
+        os.mkdir(save_dir)
+        for sample in im_selection:
+            save_subdir = save_dir + str(sample) + '/'
+            os.mkdir(save_subdir)
+            for i, image in enumerate(im_selection[sample], start=1):
+                im_ = np.stack(image[:-1])
+                io.imsave(save_subdir + str(i) + '.tif', im_)
+
     return im_selection
 
 def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False, 
-        overlay=0.7):
+        overlay=0.7, scale_bar=True):
     """
     Helper function to plot a gallery of images stored in dictionary 
     (output from mult_im_selection function)
@@ -551,11 +664,19 @@ def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False,
     else: keys = im_dict.keys()
     for sample in keys:
         for (i, im) in enumerate(im_dict[sample], start=j):
-            dic, gfp = im
+            try:
+                dic, gfp, zoom = im
+            except ValueError:
+                dic, gfp = im
+                # default zoom
+                zoom = 40
             ax = fig.add_subplot(n_row, n_col, i)
             # Plot DIC and overlay GFP
+            if scale_bar:
+                gfp, (scale_x, scale_y, scale_legend) = burn_scale_bar(gfp, zoom=zoom)
             ax.imshow(dic)
             ax.imshow(gfp, alpha=overlay, cmap=plt.cm.viridis)
+            ax.text(scale_x, scale_y,  r'$' +scale_legend + ' \mu m$', color='yellow', fontsize=8)
             ax.set_title(sample)
             plt.xticks(())
             plt.yticks(())
