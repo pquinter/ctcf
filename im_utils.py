@@ -506,7 +506,7 @@ def burn_scale_bar(im, width=6, white=True, zoom=40):
 def interpixel_dist(im, ref_length):
     """
     Compute interpixel distance by measuring an object of known length.
-    Prompts the image and allows the user to click on the two ends.
+    Prompts the image and allows the user to click on the two ends of the object.
 
     Arguments
     ---------
@@ -539,6 +539,8 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
     ---------
     datadir: string
         parent directory containing image folders
+    project: string
+        project z-stacks based on max, mean or min value.
     ext: string
         extension of image files to look for 
     limit: integer
@@ -632,7 +634,7 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
 
     return im_selection
 
-def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=False, 
+def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=True, 
         overlay=0.7, scale_bar=True):
     """
     Helper function to plot a gallery of images stored in dictionary 
