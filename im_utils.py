@@ -622,17 +622,50 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
         n+=1
         if n>limit: break
 
-    if save:
-        save_dir = './favorite_worms/'
-        os.mkdir(save_dir)
-        for sample in im_selection:
-            save_subdir = save_dir + str(sample) + '/'
-            os.mkdir(save_subdir)
-            for i, image in enumerate(im_selection[sample], start=1):
-                im_ = np.stack(image[:-1])
-                io.imsave(save_subdir + str(i) + '.tif', im_)
+    if save: save_imdict('./favorite_worms/', im_selection)
 
     return im_selection
+
+def save_imdict(save_dir, im_selection):
+    """
+    Save a dictionary of images to structured directory
+
+    Arguments
+    ---------
+    save_dir: string
+        root directory to save
+    im_selection: dict
+        dictionary with sample:images containing images to save
+    
+    Returns
+    --------
+    None
+        Saves images and prints save_dir
+
+    """
+    os.mkdir(save_dir)
+    for sample in im_selection:
+        save_subdir = save_dir + str(sample) + '/'
+        os.mkdir(save_subdir)
+        for i, image in enumerate(im_selection[sample], start=1):
+            im_ = np.stack(image[:-1])
+            zoom = image[-1]
+            io.imsave(save_subdir + str(i) + '_' + str(zoom) + '.tif', im_)
+    print('Images saved to {}'.format(save_dir))
+
+def imdict_fromdir(data_dir):
+    data_dirs = glob.glob(data_dir + '*')
+    im_collection = {}
+    for d in data_dirs:
+        strain = int(d.split('/')[-1].split('_')[0])
+        im_dirs = glob.glob(d + '/*' + '.tif')
+        ims = []
+        for im_dir in im_dirs:
+            im_ = io.imread(im_dir)
+            ims.append(im)
+        im_collection[strain] = ims
+    return im_collection
+
 
 def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=True, 
         overlay=0.7, scale_bar=True):
@@ -685,3 +718,5 @@ def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=True,
             j+=1
     if fig_title: fig.suptitle(fig_title+'\n', fontsize=20)
     plt.tight_layout()
+
+
