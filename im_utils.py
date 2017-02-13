@@ -662,7 +662,7 @@ def imdict_fromdir(data_dir):
         ims = []
         for im_dir in im_dirs:
             im_ = io.imread(im_dir)
-            ims.append(im)
+            ims.append(im_)
         im_collection[strain] = ims
     return im_collection
 
