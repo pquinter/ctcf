@@ -443,14 +443,13 @@ def draw_heart(ax):
     t = np.linspace(0, 2 * np.pi, 200)
     x = -10*(16 * np.sin(t)**3) + xheart
     y = -10*(13 * np.cos(t) - 5 * np.cos(2 * t) - 2 * np.cos(3 * t) - np.cos(4 * t)) + yheart
-    ax.plot(x, y, 'r-', lw=10, alpha=0.5)
+    ax.fill_between(x, y, color='red', alpha=0.3)
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
 
-def burn_scale_bar(im, width=6, white=True, zoom=40):
+def burn_scale_bar(im, width=6, white=True, zoom=40, pixel_dist='leica'):
     """
     Burn a horizontal scale bar
-    Default settings are for Leica microscope (Ca+2 imaging)
     Use interpixel_dist function to compute interpixel distance for other setup
 
     Arguments
@@ -462,13 +461,22 @@ def burn_scale_bar(im, width=6, white=True, zoom=40):
     white: boolean
         color of scale bar (maximum or minimum)
     zoom: int
-        Lens used on Leica microscope (20, 40 or 63x)
+        optical zoom/lens used
+    pixel_dist: dict or string (default only)
+        dictionary with key, value pairs for scale bar dimensions
+        as zoom:(length_pixels, length_microns)
+        Default settings are for Leica microscope (Ca+2 imaging)
 
     Returns
     --------
     im_out: array_like
-        copy of im with scale bar
+        copy of im with labeled scale bar
+    legend_x, legend_y: int
+        coordinates for scale bar legend
+    legend: string
+        label for scale bar (e.g. 10 microns, 20 microns...)
     """
+
     # Modify a copy of the image just in case
     im_out = im.copy()
     # Position of scale bar (top left corner)
@@ -477,31 +485,19 @@ def burn_scale_bar(im, width=6, white=True, zoom=40):
     # Position of scale bar length label (above bar)
     legend_y = im.shape[0]*0.88
 
-    if zoom == 10:
-        # 100 microns with leica 20x lens
-        length = 75
-        legend = '100'
+    # Dictionary with interpixel distance calibrated for Leica
+    # key value pairs are: zoom:(length_pixels, length_microns)
+    if pixel_dist == 'leica':
+        pixel_dist = {10:(75,'100'), 20:(70,'50'), 40:(56,'20'), 63:(40, '10')}
+    length, legend = pixel_dist[zoom]
 
-    if zoom == 20:
-        # 50 microns with leica 20x lens
-        length = 70
-        legend = '50'
-    elif zoom == 40:
-        # 20 microns long Leica 40x lens
-        length = 56
-        legend = '20'
-    elif zoom == 63:
-        # 10 microns with Leica 63x lens
-        length = 40
-        legend = '10'
+    if white: pixel_val = np.max(im)
+    else: pixel_val = np.min(im)
 
-    if white:
-        pixel_val = np.max(im)
-    else:
-        pixel_val = skimage.dtype_limits(im)[0]
-
+    # burn scale bar, not vector graphics, in case image is improperly reshaped
     im_out[i_pos-(width//2):i_pos+(width//2), j_pos:j_pos+length] = pixel_val
-    return im_out, (legend_x, legend_y, legend)
+
+    return im_out, (legend_x, legend_y, str(legend))
 
 def interpixel_dist(im, ref_length):
     """
@@ -518,7 +514,7 @@ def interpixel_dist(im, ref_length):
     Returns
     ---------
     interpixel_distance: float
-        interpixel distance in units of reference length 
+        interpixel distance in the same units as reference length 
                             (e.g. 50um for a C. elegans egg)
     """
     io.imshow(im)
@@ -639,7 +635,7 @@ def save_imdict(save_dir, im_selection):
     save_dir: string
         root directory to save
     im_selection: dict
-        dictionary with sample:images containing images to save
+        dictionary with sample:(images, zoom)
     
     Returns
     --------
@@ -699,11 +695,13 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
 
     Arguments
     ---------
-    im_dict: dictionary
+    im_dict: dictionary or str
             Dictionary with images to plot. Values must be pairs of (DIC, GFP)
-    n_row, n_col: integer
+            Also takes path to image directories that can be loaded with imdict_fromdir function
+    n_row, n_col: integer or str
             number of rows and columns in plot
             If less than number of images, truncates to plot n_row * n_col
+            If auto, automatically determine
     fig_title: string
             optional figure title
     sort: boolean
