@@ -528,7 +528,7 @@ def interpixel_dist(im, ref_length):
     return interpixel_distance
 
 def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, 
-        heart=True, save=False, crop_roi='gfp'):
+        heart=True, save=False, crop_roi='gfp', overlay=0.9):
     """
     Widget for image selection, z_projection, ROI cropping, and DIC-GFP overlay 
     from multiple samples stored in different directories.
@@ -551,6 +551,8 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
         whether to save selected images to disk
     crop_roi: string or False
         whether to find rectangular ROI using dic, gfp, or nothing
+    overlay: float
+        alpha value to overlay GFP on DIC. 1 means completely block DIC
 
     Returns
     ---------
@@ -563,6 +565,8 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
     im_selection = {}
     # counter to limit number of dictionaries
     n=1
+    # start interactive mode
+    plt.ion()
 
     # show images by directory/strain
     for d in data_dirs:
@@ -571,7 +575,7 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
         try:
             fig, axes = plt.subplots(3, int(len(im_dirs)/3))
         except IndexError:
-            fig, axes = plt.subplots(len(im_dirs))
+            fig, axes = plt.subplots(1)
         # get strain number
         strain = int(d.split('/')[-1].split('_')[0])
         curr_ims = []
@@ -602,7 +606,7 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
             curr_ims.append((dic, gfp, zoom))
             # Plot DIC and overlay GFP
             ax.imshow(dic)
-            ax.imshow(gfp, alpha=0.7, cmap=plt.cm.viridis)
+            ax.imshow(gfp, alpha=overlay, cmap=plt.cm.viridis)
             ax.set_title(im_name)
             ax.set_xticks([])
             ax.set_yticks([])
@@ -650,10 +654,23 @@ def save_imdict(save_dir, im_selection):
         for i, image in enumerate(im_selection[sample], start=1):
             im_ = np.stack(image[:-1])
             zoom = image[-1]
-            io.imsave(save_subdir + str(i) + '_' + str(zoom) + '.tif', im_)
+            io.imsave(save_subdir + str(i) + '_' + str(zoom) + 'x.tif', im_)
     print('Images saved to {}'.format(save_dir))
 
 def imdict_fromdir(data_dir):
+    """
+    Load images from multiple subdirs in data_dir to dictionary
+
+    Arguments
+    ---------
+    data_dir: string
+        root directory containing subirectories with images
+
+    Returns
+    ---------
+    im_collection: dictionary
+        dict containing sample:(dic, gfp, zoom)
+    """
     data_dirs = glob.glob(data_dir + '*')
     im_collection = {}
     for d in data_dirs:
@@ -661,13 +678,20 @@ def imdict_fromdir(data_dir):
         im_dirs = glob.glob(d + '/*' + '.tif')
         ims = []
         for im_dir in im_dirs:
-            im_ = io.imread(im_dir)
-            ims.append(im_)
+            im_name = im_dir.split('/')[-1]
+            im_stack = io.imread_collection(im_dir)
+            # Get channels, DIC is always first array
+            dic = im_stack[0]
+            gfp = im_stack[1]
+            # Get zoom
+            if 'x' in im_name:
+                zoom = int(im_name.split('_')[-1].split('x')[0])
+            else: zoom = 40
+            ims.append((dic, gfp, zoom))
         im_collection[strain] = ims
     return im_collection
 
-
-def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=True, 
+def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True, 
         overlay=0.7, scale_bar=True):
     """
     Helper function to plot a gallery of images stored in dictionary 
@@ -692,25 +716,45 @@ def mult_im_plot(im_dict, n_row=3, n_col=4, fig_title=None, sort=True,
     None (only plots gallery)
     """
 
+    # Load image dictionary if required
+    if isinstance(im_dict, str):
+        im_dict = imdict_fromdir(data_dir)
+
+    # get appropiate number of rows and columns for plot
+    if n_row and n_col == 'auto':
+        num_ims = len([im for k in im_dict for im in im_dict[k]])
+        n_col = num_ims//4
+        # check if even number of images, otherwise add an extra row
+        if num_ims % 2 == 0:
+            n_row = num_ims//n_col
+        else: n_row = int(num_ims/n_col) + 1
+
+    # whether to sort by name
+    if sort: keys = sorted(im_dict)
+    else: keys = im_dict.keys()
+
     fig = plt.figure(figsize=(1.8 * n_col, 2.4 * n_row))
     # counter to add axes
     j=1
-    if sort: keys = sorted(im_dict)
-    else: keys = im_dict.keys()
     for sample in keys:
         for (i, im) in enumerate(im_dict[sample], start=j):
             try:
+                # get zoom for scale bar; if not specified, use default
+                # regardless of whether or not it is drawn (specified later)
                 dic, gfp, zoom = im
             except ValueError:
                 dic, gfp = im
                 # default zoom
                 zoom = 40
-            ax = fig.add_subplot(n_row, n_col, i)
-            # Plot DIC and overlay GFP
+
             if scale_bar:
                 gfp, (scale_x, scale_y, scale_legend) = burn_scale_bar(gfp, zoom=zoom)
+
+            # Create subplot, plot DIC and overlay GFP
+            ax = fig.add_subplot(n_row, n_col, i)
             ax.imshow(dic)
             ax.imshow(gfp, alpha=overlay, cmap=plt.cm.viridis)
+            # Add scale bar label (microns)
             ax.text(scale_x, scale_y,  r'$' +scale_legend + ' \mu m$', color='yellow', fontsize=8)
             ax.set_title(sample)
             plt.xticks(())
