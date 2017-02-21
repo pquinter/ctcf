@@ -716,7 +716,7 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
 
     # Load image dictionary if required
     if isinstance(im_dict, str):
-        im_dict = imdict_fromdir(data_dir)
+        im_dict = imdict_fromdir(im_dict)
 
     # get appropiate number of rows and columns for plot
     if n_row and n_col == 'auto':
