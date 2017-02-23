@@ -614,7 +614,7 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
                         lambda event: clickselect_plot(event, selected, fig, np.ravel(axes), heart))
         # Stop after 100 clicks or until the user is done
         fig.suptitle('Click to like, right click (Alt+click) when done\nsample:{}\n'.format(strain), fontsize=15)
-        plt.tight_layout()
+        #plt.tight_layout()
         plt.ginput(100, timeout=0, show_clicks=True)
         fig.canvas.mpl_disconnect(cid)
         plt.close('all')
@@ -723,7 +723,9 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
     # get appropiate number of rows and columns for plot
     if n_row and n_col == 'auto':
         num_ims = len([im for k in im_dict for im in im_dict[k]])
-        n_col = num_ims//4
+        if num_ims > 4:
+            n_col = num_ims//4
+        else: n_col = num_ims
         # compute number of rows required
         if num_ims % n_col ==0:
             n_row = (num_ims // n_col)
@@ -752,10 +754,11 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
 
             # Create subplot, plot DIC and overlay GFP
             ax = fig.add_subplot(n_row, n_col, i)
-            ax.imshow(dic)
+            ax.imshow(dic, cmap=plt.cm.gray)
             ax.imshow(gfp, alpha=overlay, cmap=plt.cm.viridis)
-            # Add scale bar label (microns)
-            ax.text(scale_x, scale_y,  r'$' +scale_legend + ' \mu m$', color='yellow', fontsize=8)
+            if scale_bar:
+                # Add scale bar label (microns)
+                ax.text(scale_x, scale_y,  r'$' +scale_legend + ' \mu m$', color='yellow', fontsize=8)
             ax.set_title(sample)
             plt.xticks(())
             plt.yticks(())
