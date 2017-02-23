@@ -573,7 +573,7 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
         except IndexError:
             fig, axes = plt.subplots(1)
         # get strain number
-        strain = int(d.split('/')[-1].split('_')[0])
+        strain = d.split('/')[-1].split('_')[0]
         curr_ims = []
 
         for (im_dir, ax) in zip(im_dirs, np.ravel(axes)):
@@ -670,7 +670,7 @@ def imdict_fromdir(data_dir):
     data_dirs = glob.glob(data_dir + '*')
     im_collection = {}
     for d in data_dirs:
-        strain = int(d.split('/')[-1].split('_')[0])
+        strain = d.split('/')[-1].split('_')[0]
         im_dirs = glob.glob(d + '/*' + '.tif')
         ims = []
         for im_dir in im_dirs:
@@ -716,16 +716,18 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
 
     # Load image dictionary if required
     if isinstance(im_dict, str):
+        # add slash if not included in path
+        if im_dict[-1] != '/': im_dict += '/'
         im_dict = imdict_fromdir(im_dict)
 
     # get appropiate number of rows and columns for plot
     if n_row and n_col == 'auto':
         num_ims = len([im for k in im_dict for im in im_dict[k]])
         n_col = num_ims//4
-        # check if even number of images, otherwise add an extra row
-        if num_ims % 2 == 0:
-            n_row = num_ims//n_col
-        else: n_row = int(num_ims/n_col) + 1
+        # compute number of rows required
+        if num_ims % n_col ==0:
+            n_row = (num_ims // n_col)
+        else: n_row = (num_ims // n_col) + (num_ims % n_col)
 
     # whether to sort by name
     if sort: keys = sorted(im_dict)
@@ -761,4 +763,24 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
     if fig_title: fig.suptitle(fig_title+'\n', fontsize=20)
     plt.tight_layout()
 
+def zoom2roi(ax):
+    """
+    Identify coordinates of zoomed-in/moved axis in interactive mode
 
+    Arguments
+    ---------
+    ax: matplotlib axis
+        zoomed-in/moved axis
+
+    Returns
+    ---------
+    zoom_coords: tuple of slice objects
+        coordinates of zoomed in box, use as im[zoom_coords]
+
+    """
+    # get x and y limits
+    xlim = [int(x) for x in ax.get_xlim()]
+    ylim = [int(y) for y in ax.get_ylim()]
+
+    # make and return slice objects
+    return (slice(ylim[1],ylim[0]), slice(xlim[0],xlim[1]))
