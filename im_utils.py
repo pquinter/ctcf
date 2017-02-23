@@ -688,7 +688,7 @@ def imdict_fromdir(data_dir):
     return im_collection
 
 def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True, 
-        overlay=0.7, scale_bar=True):
+        overlay=0.7, scale_bar=True, scale_font=8):
     """
     Helper function to plot a gallery of images stored in dictionary 
     (output from mult_im_selection function)
@@ -758,7 +758,7 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
             ax.imshow(gfp, alpha=overlay, cmap=plt.cm.viridis)
             if scale_bar:
                 # Add scale bar label (microns)
-                ax.text(scale_x, scale_y,  r'$' +scale_legend + ' \mu m$', color='yellow', fontsize=8)
+                ax.text(scale_x, scale_y,  r'$' +scale_legend + ' \mu m$', color='yellow', fontsize=scale_font)
             ax.set_title(sample)
             plt.xticks(())
             plt.yticks(())
