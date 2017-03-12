@@ -523,8 +523,8 @@ def interpixel_dist(im, ref_length):
     interpixel_distance = feature_length / ref_length
     return interpixel_distance
 
-def mult_im_selection(data_dir, project='max', ext='.tif', limit=100, 
-        heart=True, save=False, crop_roi='gfp', overlay=0.9):
+def mult_im_selection(data_dir, has_dic=True, project='max', ext='.tif', limit=100, 
+        heart=True, save=False, crop_roi=False, overlay=0.9, plot=False):
     """
     Widget for image selection, z_projection, ROI cropping, and DIC-GFP overlay 
     from multiple samples stored in different directories.
@@ -535,6 +535,8 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
     ---------
     datadir: string
         parent directory containing image folders
+    has_dic: boolean
+        whether image stacks have DIC, should be first in stack
     project: string
         project z-stacks based on max, mean or min value.
     ext: string
@@ -549,6 +551,8 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
         whether to find rectangular ROI using dic, gfp, or nothing
     overlay: float
         alpha value to overlay GFP on DIC. 1 means completely block DIC
+    plot: boolean
+        whether to plot selection of images and save to pdf
 
     Returns
     ---------
@@ -587,7 +591,9 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
             im_stack = io.imread_collection(im_dir)
             # Get channels, DIC is always first array
             dic = im_stack[0]
-            gfp = im_stack[1:]
+            if has_dic:
+                gfp = im_stack[1:]
+            else: gfp = im_stack[0:]
             # Project gfp based on maximum value
             gfp = z_project(gfp, project=project)
             # Find and crop ROI
@@ -622,11 +628,12 @@ def mult_im_selection(data_dir, project='max', ext='.tif', limit=100,
         n+=1
         if n>limit: break
 
-    if save: save_imdict('./favorite_worms/', im_selection)
+    if save: save_imdict('./favorite_worms/', im_selection, has_dic)
+    if plot: mult_im_plot(im_selection, save=True)
 
     return im_selection
 
-def save_imdict(save_dir, im_selection):
+def save_imdict(save_dir, im_selection, has_dic):
     """
     Save a dictionary of images to structured directory
 
@@ -641,14 +648,16 @@ def save_imdict(save_dir, im_selection):
     --------
     None
         Saves images and prints save_dir
-
     """
     os.mkdir(save_dir)
     for sample in im_selection:
         save_subdir = save_dir + str(sample) + '/'
         os.mkdir(save_subdir)
         for i, image in enumerate(im_selection[sample], start=1):
-            im_ = np.stack(image[:-1])
+            # each entry in im_selection is (dic, gfp, zoom)
+            if has_dic:
+                im_ = np.stack(image[:-1])
+            else: im_ = image[1]
             zoom = image[-1]
             io.imsave(save_subdir + str(i) + '_' + str(zoom) + 'x.tif', im_)
     print('Images saved to {}'.format(save_dir))
@@ -688,7 +697,7 @@ def imdict_fromdir(data_dir):
     return im_collection
 
 def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True, 
-        overlay=0.7, scale_bar=True, scale_font=8):
+        overlay=0.7, scale_bar=True, scale_font=8, save=False):
     """
     Helper function to plot a gallery of images stored in dictionary 
     (output from mult_im_selection function)
@@ -708,6 +717,8 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
             whether to plot images sorted by key
     overlay: float
             alpha value for GFP channel (0-1). If 1, then completely hide DIC
+    save: boolean
+        whether to save plot to pdf
 
     Returns
     ---------
@@ -724,7 +735,7 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
     if n_row and n_col == 'auto':
         num_ims = len([im for k in im_dict for im in im_dict[k]])
         if num_ims > 4:
-            n_col = num_ims//4
+            n_col = num_ims//2
         else: n_col = num_ims
         # compute number of rows required
         if num_ims % n_col ==0:
@@ -735,6 +746,7 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
     if sort: keys = sorted(im_dict)
     else: keys = im_dict.keys()
 
+    plt.ion()
     fig = plt.figure(figsize=(1.8 * n_col, 2.4 * n_row))
     # counter to add axes
     j=1
@@ -765,6 +777,7 @@ def mult_im_plot(im_dict, n_row='auto', n_col='auto', fig_title=None, sort=True,
             j+=1
     if fig_title: fig.suptitle(fig_title+'\n', fontsize=20)
     plt.tight_layout()
+    if save: plt.savefig('./favorite_worms.pdf', transparent=True, bbox_inches='tight')
 
 def zoom2roi(ax):
     """
