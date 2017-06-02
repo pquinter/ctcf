@@ -184,7 +184,7 @@ def rectangleROI(im, thresh=None):
 
     return roi_coords
 
-def label_sizesel(im, im_mask, max_int, min_int, minor_ax_lim, major_ax_lim, max_area):
+def label_sizesel(im, im_mask, int_lim, minor_ax_lim, major_ax_lim, area_lim):
     """
     Create and label markers from image mask, 
     filter by area and compute region properties
@@ -193,6 +193,8 @@ def label_sizesel(im, im_mask, max_int, min_int, minor_ax_lim, major_ax_lim, max
     ---------
     im: array_like
         input image
+    feature_lim: iterable of two
+        minimum and maximum bounds for each feature, inclusive
 
     Returns
     ---------
@@ -206,10 +208,11 @@ def label_sizesel(im, im_mask, max_int, min_int, minor_ax_lim, major_ax_lim, max
     # get only markers within area bounds, above intensity thersh and 
     # not oversaturated
     all_labels = np.unique(markers)
-    sel_labels = [n.label for n in nuclei if n.minor_axis_length > minor_ax_lim
-                    and n.major_axis_length < major_ax_lim \
-                    and n.area < max_area \
-                    and min_int < n.max_intensity < max_int]
+    sel_labels = [n.label for n in nuclei if \
+                    minor_ax_lim[0] <= n.minor_axis_length <= minor_ax_lim[1]
+                    and major_ax_lim[0] <= n.major_axis_length <= major_ax_lim[1] \
+                    and area_lim[0] <= n.area <= area_lim[1] \
+                    and int_lim[0] <= n.max_intensity <= int_lim[1]]
     rem_labels = [l for l in all_labels if l not in sel_labels]
     # remove unselected markers
     for l in rem_labels:
