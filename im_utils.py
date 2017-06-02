@@ -56,7 +56,7 @@ def z_project(stack, project='max'):
     stack: array_like. 
         input image stack
     project: str
-        which value to project: maximum (max), minimum (min) or mean
+        which value to project: maximum (max), minimum (min)
 
     Returns
     ---------
@@ -67,8 +67,9 @@ def z_project(stack, project='max'):
         z_im = np.maximum.reduce([z for z in stack])
     if project == 'min':
         z_im = np.minimum.reduce([z for z in stack])
-    if project == 'mean':
-        z_im = np.mean.reduce([z for z in stack])
+    # np.mean does not have reduce
+    #if project == 'mean':
+    #    z_im = np.mean.reduce([z for z in stack])
 
     return z_im
 
@@ -303,7 +304,7 @@ def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
     plt.tight_layout()
     return None
 
-def mask_image(im, thresh=None, min_size=15):
+def mask_image(im, im_thresh=None, min_size=15, block_size=None):
     """
     Create a binary mask to segment nuclei using adaptive threshold.
     Useful to find nuclei of varying intensities.
@@ -320,17 +321,20 @@ def mask_image(im, thresh=None, min_size=15):
         thresholded image
     min_size: float or int
         minimum size of objects to retain
+    block_size: odd int
+        block size for adaptive threshold, must be provided if im_thresh is None
 
     Returns
     ---------
     im_thresh: array_like
         thresholded binary image 
     """
-    if not thresh:
-        im_thresh = threshold_adaptive(im, 15)
+    if im_thresh is None:
+        im_thresh = threshold_adaptive(im, block_size)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh)
+    im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     return im_thresh
 
 def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
