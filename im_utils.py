@@ -184,7 +184,7 @@ def rectangleROI(im, thresh=None):
 
     return roi_coords
 
-def label_sizesel(im, im_mask, int_lim, minor_ax_lim, major_ax_lim, area_lim):
+def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim, major_ax_lim, area_lim):
     """
     Create and label markers from image mask, 
     filter by area and compute region properties
@@ -212,7 +212,7 @@ def label_sizesel(im, im_mask, int_lim, minor_ax_lim, major_ax_lim, area_lim):
                     minor_ax_lim[0] <= n.minor_axis_length <= minor_ax_lim[1]
                     and major_ax_lim[0] <= n.major_axis_length <= major_ax_lim[1] \
                     and area_lim[0] <= n.area <= area_lim[1] \
-                    and int_lim[0] <= n.max_intensity <= int_lim[1]]
+                    and maxint_lim[0] <= n.max_intensity <= maxint_lim[1]]
     rem_labels = [l for l in all_labels if l not in sel_labels]
     # remove unselected markers
     for l in rem_labels:
@@ -807,3 +807,21 @@ def zoom2roi(ax):
 
     # make and return slice objects
     return (slice(ylim[1],ylim[0]), slice(xlim[0],xlim[1]))
+
+def show_movie(stack, delay=0.5):
+    """
+    Show movie from stack
+    stack: numpy stack
+        collection of 2D frames (movie)
+    delay: number
+        delay in between frames
+    """
+    for n, frame in enumerate(stack):
+        try:
+            mov.set_data(frame)
+        except NameError:
+            mov = plt.imshow(frame, cmap='viridis')
+        plt.title('frame {}'.format(n+1))
+        plt.draw()
+        plt.pause(delay)
+
