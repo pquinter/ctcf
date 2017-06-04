@@ -808,20 +808,87 @@ def zoom2roi(ax):
     # make and return slice objects
     return (slice(ylim[1],ylim[0]), slice(xlim[0],xlim[1]))
 
-def show_movie(stack, delay=0.5):
+def show_movie(stack, delay=0.5, cmap='viridis'):
     """
     Show movie from stack
+
+    Arguments
+    ---------
     stack: numpy stack
         collection of 2D frames (movie)
-    delay: number
+    delay: int
         delay in between frames
+
+    Returns
+    ---------
+    None
+        plays movie
     """
     for n, frame in enumerate(stack):
         try:
             mov.set_data(frame)
         except NameError:
-            mov = plt.imshow(frame, cmap='viridis')
+            mov = plt.imshow(frame, cmap=cmap)
         plt.title('frame {}'.format(n+1))
         plt.draw()
         plt.pause(delay)
+
+def resize_frame(frame, h, w):
+    """ 
+    Resize frame to larger shape (h,w) by filling with zeros
+
+    Arguments
+    ---------
+    frame: numpy array
+    h, w: int
+        new height and width
+
+    Returns
+    ---------
+    new_frame: numpy array
+        resized frame
+    """
+    new_frame = np.zeros((h,w))
+    new_frame[:frame.shape[0], :frame.shape[1]] = frame
+    return new_frame
+
+def concat_movies(movies, nrows=1):
+    """
+    Concatenate a set movies frame by frame to play multiple simultaneously
+
+    Arguments
+    ---------
+    movies: iterable of numpy stacks
+        movies to show
+    rows: int
+        number of rows to display movies into, 
+        will add rows if necessary, i.e. nmovies%nrows!=0
+
+    Returns
+    ---------
+    conc_mov: list of arrays
+        concatenated movies, can be played using show_movie
+    """
+    # number of frames per movie and number of movies per column
+    n_frames = len(movies[0])
+    mpc = int(len(movies)/nrows)
+    # maximum frame height and width
+    max_h = max([m[0].shape[0] for m in movies])
+    max_w = max([m[0].shape[1] for m in movies])
+    # new concatenated movie
+    conc_mov = []
+    # divide into sets of movies per row
+    movs_byrow = [movies[i:i+mpc] for i in range(0, len(movies), mpc)]
+    for f in range(n_frames):
+        currframes = []
+        for movrow in movs_byrow:
+            while len(movrow) < mpc:
+                # fill in empty columns with black frames if needed
+                movrow.append(np.zeros_like(movrow[0]))
+            # concatenate each (same sized) frame of movies in row
+            currframes.append(np.concatenate([resize_frame(mov[f], max_h, max_w) \
+                                    for mov in movrow], axis=1))
+        conc_mov.append(np.vstack(currframes))
+    return conc_mov
+
 
