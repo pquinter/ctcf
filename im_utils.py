@@ -808,7 +808,7 @@ def zoom2roi(ax):
     # make and return slice objects
     return (slice(ylim[1],ylim[0]), slice(xlim[0],xlim[1]))
 
-def show_movie(stack, delay=0.5, cmap='viridis'):
+def show_movie(stack, delay=0.5, cmap='viridis', close=True):
     """
     Show movie from stack
 
@@ -816,8 +816,10 @@ def show_movie(stack, delay=0.5, cmap='viridis'):
     ---------
     stack: numpy stack
         collection of 2D frames (movie)
-    delay: int
+    delay: float
         delay in between frames
+    close: boolean
+        whether to close plot when done
 
     Returns
     ---------
@@ -829,9 +831,13 @@ def show_movie(stack, delay=0.5, cmap='viridis'):
             mov.set_data(frame)
         except NameError:
             mov = plt.imshow(frame, cmap=cmap)
+        plt.xticks(())
+        plt.yticks(())
         plt.title('frame {}'.format(n+1))
         plt.draw()
         plt.pause(delay)
+    if close:
+        plt.close('all')
 
 def resize_frame(frame, h, w):
     """ 
