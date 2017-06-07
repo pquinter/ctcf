@@ -22,6 +22,7 @@ from skimage import io, morphology
 from skimage.filters import threshold_adaptive
 from skimage.draw import circle_perimeter
 from scipy import ndimage
+import moviepy.editor as mpy
 
 
 def split_project(im_col):
@@ -307,7 +308,7 @@ def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
     plt.tight_layout()
     return None
 
-def mask_image(im, im_thresh=None, min_size=15, block_size=None):
+def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.morphology.disk(15)):
     """
     Create a binary mask to segment nuclei using adaptive threshold.
     Useful to find nuclei of varying intensities.
@@ -336,7 +337,7 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=None):
         im_thresh = threshold_adaptive(im, block_size)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
-    im_thresh = morphology.binary_opening(im_thresh)
+    im_thresh = morphology.binary_opening(im_thresh, selem=selem)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     return im_thresh
 
@@ -808,7 +809,7 @@ def zoom2roi(ax):
     # make and return slice objects
     return (slice(ylim[1],ylim[0]), slice(xlim[0],xlim[1]))
 
-def show_movie(stack, delay=0.5, cmap='viridis', close=True):
+def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
     """
     Show movie from stack
 
@@ -818,43 +819,55 @@ def show_movie(stack, delay=0.5, cmap='viridis', close=True):
         collection of 2D frames (movie)
     delay: float
         delay in between frames
-    close: boolean
-        whether to close plot when done
+    h, w: int
+        height and width of movie display
+    time: int or None
+        inter-frame time to display on top of movie, in seconds
 
     Returns
     ---------
     None
         plays movie
     """
+    fig = plt.figure(figsize=(w, h))
     for n, frame in enumerate(stack):
         try:
             mov.set_data(frame)
         except NameError:
             mov = plt.imshow(frame, cmap=cmap)
+            plt.tight_layout()
         plt.xticks(())
         plt.yticks(())
-        plt.title('frame {}'.format(n+1))
         plt.draw()
         plt.pause(delay)
-    if close:
-        plt.close('all')
+        if time:
+            plt.title('t {}s'.format(n*time))
+        else:
+            plt.title('frame {}'.format(n+1))
 
-def resize_frame(frame, h, w):
+def resize_frame(frame, h, w, fillvalue='min'):
     """ 
-    Resize frame to larger shape (h,w) by filling with zeros
+    Resize frame to larger shape (h,w) by filling with 'fillvalue'
 
     Arguments
     ---------
     frame: numpy array
     h, w: int
         new height and width
+    fillvalue: str or number
+        'min', 'zeros' or number, value to fill empty spaces
 
     Returns
     ---------
     new_frame: numpy array
         resized frame
     """
-    new_frame = np.zeros((h,w))
+    if fillvalue=='min':
+        new_frame = np.full((h,w), np.min(frame))
+    elif fillvalue=='zeros':
+        new_frame = np.zeros((h,w))
+    else:
+        new_frame = np.full((h,w), fillvalue)
     new_frame[:frame.shape[0], :frame.shape[1]] = frame
     return new_frame
 
@@ -872,7 +885,7 @@ def concat_movies(movies, nrows=1):
 
     Returns
     ---------
-    conc_mov: list of arrays
+    conc_mov: numpy stack
         concatenated movies, can be played using show_movie
     """
     # number of frames per movie and number of movies per column
@@ -881,6 +894,8 @@ def concat_movies(movies, nrows=1):
     # maximum frame height and width
     max_h = max([m[0].shape[0] for m in movies])
     max_w = max([m[0].shape[1] for m in movies])
+    # minimum pixel value to fill empty spaces
+    min_val = (min([np.min(m) for m in movies])) 
     # new concatenated movie
     conc_mov = []
     # divide into sets of movies per row
@@ -890,11 +905,73 @@ def concat_movies(movies, nrows=1):
         for movrow in movs_byrow:
             while len(movrow) < mpc:
                 # fill in empty columns with black frames if needed
-                movrow.append(np.zeros_like(movrow[0]))
+                movrow.append(np.full_like(movrow[0], np.min(movrow[0])))
             # concatenate each (same sized) frame of movies in row
-            currframes.append(np.concatenate([resize_frame(mov[f], max_h, max_w) \
-                                    for mov in movrow], axis=1))
+            currframes.append(np.concatenate([resize_frame(mov[f], 
+                            max_h, max_w, min_val) for mov in movrow], axis=1))
         conc_mov.append(np.vstack(currframes))
-    return conc_mov
+    return np.stack(conc_mov)
 
+def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
+    """
+    Show movie from stack
 
+    Arguments
+    ---------
+    stack: numpy stack
+        collection of 2D frames (movie)
+    delay: float
+        delay in between frames
+    h, w: int
+        height and width of movie display
+    time: int or None
+        inter-frame time to display on top of movie, in seconds
+
+    Returns
+    ---------
+    None
+        plays movie
+    """
+    fig = plt.figure(figsize=(w, h))
+    for n, frame in enumerate(stack):
+        try:
+            mov.set_data(frame)
+        except NameError:
+            mov = plt.imshow(frame, cmap=cmap)
+            plt.tight_layout()
+        plt.xticks(())
+        plt.yticks(())
+        plt.draw()
+        plt.pause(delay)
+        if time:
+            plt.title('t {}s'.format(n*time))
+        else:
+            plt.title('frame {}'.format(n+1))
+
+def save_movie(stack, savedir='./myvideo.mp4', w=6, h=10):
+    """
+    Save numpy stack as mp4 movie
+
+    Arguments
+    ---------
+    stack: numpy stack
+        video to save of the form (n_frames, width, height)
+    savedir: str
+        directory to save video
+    w, h: width and height of movie
+
+    Returns
+    ---------
+    None
+        Just saves the video to 'savedir'
+    """
+    fig = plt.figure(figsize=(w, h))
+    mov = plt.imshow(stack[0], cmap='viridis')
+    def make_frame(t):
+        """ Update frame"""
+        mov.set_data(stack[t])
+        return mplfig_to_npimage(fig) # RGB image of the figure
+    animation = mpy.VideoClip(make_frame_mpl, duration=len(stack))
+    animation.write_videofile(savedir, 1)
+    plt.close('all')
+    return None
