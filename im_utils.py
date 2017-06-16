@@ -23,7 +23,7 @@ from skimage.filters import threshold_adaptive
 from skimage.draw import circle_perimeter
 from scipy import ndimage
 import moviepy.editor as mpy
-
+from moviepy.video.io.bindings import mplfig_to_npimage
 
 def split_project(im_col):
     """
@@ -932,6 +932,7 @@ def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
     None
         plays movie
     """
+    %matplotlib
     fig = plt.figure(figsize=(w, h))
     for n, frame in enumerate(stack):
         try:
@@ -965,13 +966,14 @@ def save_movie(stack, savedir='./myvideo.mp4', w=6, h=10):
     None
         Just saves the video to 'savedir'
     """
+    %matplotlib inline
     fig = plt.figure(figsize=(w, h))
     mov = plt.imshow(stack[0], cmap='viridis')
     def make_frame(t):
         """ Update frame"""
         mov.set_data(stack[t])
         return mplfig_to_npimage(fig) # RGB image of the figure
-    animation = mpy.VideoClip(make_frame_mpl, duration=len(stack))
+    animation = mpy.VideoClip(make_frame, duration=len(stack))
     animation.write_videofile(savedir, 1)
     plt.close('all')
     return None
