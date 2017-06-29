@@ -888,8 +888,17 @@ def concat_movies(movies, nrows=1):
     conc_mov: numpy stack
         concatenated movies, can be played using show_movie
     """
-    # number of frames per movie and number of movies per column
-    n_frames = len(movies[0])
+    # max number of frames per movie
+    n_frames = max([len(l) for l in movies])
+    # add black frames if necessary
+    if not all(len(x) == n_frames for x in movies):
+        _movies = []
+        for m in movies:
+            while len(m)< n_frames:
+                m = np.append(m, [np.zeros_like(m[0])], axis=0)
+            _movies.append(m)
+    movies = _movies
+    # number of movies per column
     mpc = int(len(movies)/nrows)
     # maximum frame height and width
     max_h = max([m[0].shape[0] for m in movies])
@@ -932,7 +941,6 @@ def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
     None
         plays movie
     """
-    %matplotlib
     fig = plt.figure(figsize=(w, h))
     for n, frame in enumerate(stack):
         try:
@@ -966,7 +974,6 @@ def save_movie(stack, savedir='./myvideo.mp4', w=6, h=10):
     None
         Just saves the video to 'savedir'
     """
-    %matplotlib inline
     fig = plt.figure(figsize=(w, h))
     mov = plt.imshow(stack[0], cmap='viridis')
     def make_frame(t):
