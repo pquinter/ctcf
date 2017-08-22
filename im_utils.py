@@ -809,7 +809,8 @@ def zoom2roi(ax):
     # make and return slice objects
     return (slice(ylim[1],ylim[0]), slice(xlim[0],xlim[1]))
 
-def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
+def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None,
+        loop=False):
     """
     Show movie from stack
 
@@ -823,6 +824,8 @@ def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
         height and width of movie display
     time: int or None
         inter-frame time to display on top of movie, in seconds
+    loop: boolean
+        whether to loop the movie
 
     Returns
     ---------
@@ -830,20 +833,22 @@ def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
         plays movie
     """
     fig = plt.figure(figsize=(w, h))
-    for n, frame in enumerate(stack):
-        try:
-            mov.set_data(frame)
-        except NameError:
-            mov = plt.imshow(frame, cmap=cmap)
-            plt.tight_layout()
-        plt.xticks(())
-        plt.yticks(())
-        plt.draw()
-        plt.pause(delay)
-        if time:
-            plt.title('t {}s'.format(n*time))
-        else:
-            plt.title('frame {}'.format(n+1))
+    while True:
+        for n, frame in enumerate(stack):
+            try:
+                mov.set_data(frame)
+            except NameError:
+                mov = plt.imshow(frame, cmap=cmap)
+                plt.tight_layout()
+            plt.xticks(())
+            plt.yticks(())
+            plt.draw()
+            plt.pause(delay)
+            if time:
+                plt.title('t {}s'.format(n*time))
+            else:
+                plt.title('frame {}'.format(n+1))
+        if not loop: break
 
 def resize_frame(frame, h, w, fillvalue='min'):
     """ 
@@ -897,7 +902,8 @@ def concat_movies(movies, nrows=1):
             while len(m)< n_frames:
                 m = np.append(m, [np.zeros_like(m[0])], axis=0)
             _movies.append(m)
-    movies = _movies
+    try: movies = _movies
+    except NameError: pass
     # number of movies per column
     mpc = int(len(movies)/nrows)
     # maximum frame height and width
@@ -921,66 +927,3 @@ def concat_movies(movies, nrows=1):
         conc_mov.append(np.vstack(currframes))
     return np.stack(conc_mov)
 
-def show_movie(stack, delay=0.5, cmap='viridis', h=10, w=6, time=None):
-    """
-    Show movie from stack
-
-    Arguments
-    ---------
-    stack: numpy stack
-        collection of 2D frames (movie)
-    delay: float
-        delay in between frames
-    h, w: int
-        height and width of movie display
-    time: int or None
-        inter-frame time to display on top of movie, in seconds
-
-    Returns
-    ---------
-    None
-        plays movie
-    """
-    fig = plt.figure(figsize=(w, h))
-    for n, frame in enumerate(stack):
-        try:
-            mov.set_data(frame)
-        except NameError:
-            mov = plt.imshow(frame, cmap=cmap)
-            plt.tight_layout()
-        plt.xticks(())
-        plt.yticks(())
-        plt.draw()
-        plt.pause(delay)
-        if time:
-            plt.title('t {}s'.format(n*time))
-        else:
-            plt.title('frame {}'.format(n+1))
-
-def save_movie(stack, savedir='./myvideo.mp4', w=6, h=10):
-    """
-    Save numpy stack as mp4 movie
-
-    Arguments
-    ---------
-    stack: numpy stack
-        video to save of the form (n_frames, width, height)
-    savedir: str
-        directory to save video
-    w, h: width and height of movie
-
-    Returns
-    ---------
-    None
-        Just saves the video to 'savedir'
-    """
-    fig = plt.figure(figsize=(w, h))
-    mov = plt.imshow(stack[0], cmap='viridis')
-    def make_frame(t):
-        """ Update frame"""
-        mov.set_data(stack[t])
-        return mplfig_to_npimage(fig) # RGB image of the figure
-    animation = mpy.VideoClip(make_frame, duration=len(stack))
-    animation.write_videofile(savedir, 1)
-    plt.close('all')
-    return None
