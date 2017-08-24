@@ -927,3 +927,19 @@ def concat_movies(movies, nrows=1):
         conc_mov.append(np.vstack(currframes))
     return np.stack(conc_mov)
 
+def regionprops2df(regionprops, props = ('label','area','coords',
+    'intensity_image', 'mean_intensity','max_intensity','min_intensity')):
+    """
+    Convert list of region properties to dataframe
+
+    Arguments
+    ---------
+    regionprops: skimage.measure._regionprops object
+    props: list of str, properties to store
+
+    Returns
+    ---------
+    Pandas DataFrame with region properties
+    """
+    if not isinstance(regionprops, list): regionprops = [regionprops]
+    return pd.DataFrame([[r[p] for p in props] for r in regionprops],columns=props)
