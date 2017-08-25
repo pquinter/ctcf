@@ -22,8 +22,8 @@ from skimage import io, morphology
 from skimage.filters import threshold_adaptive
 from skimage.draw import circle_perimeter
 from scipy import ndimage
-import moviepy.editor as mpy
-from moviepy.video.io.bindings import mplfig_to_npimage
+
+from numba import jit
 
 def split_project(im_col):
     """
@@ -970,3 +970,25 @@ def tracking_movie(movie, tracks):
             im_plot[circle] = np.max(im_plot)
         movie_tracks[f] = im_plot
     return movie_tracks
+
+@jit(nopython=True)
+def normalize(movie):
+    """
+    min-max scaler for a movie, to fix each frame in the range [0, 1]
+
+    Arguments
+    ---------
+    movie: array
+        movie to normalized
+
+    Returns
+    ---------
+    scaled: array
+        normalized copy of the movie
+    """
+    scaled = np.empty(movie.shape) # for numba it is necessary to use np.empty because float is default dtype
+    for i in range(len(movie)):
+        frame = movie[i]
+        scaled[i] = (frame - np.min(frame)) / (np.max(frame) - np.min(frame))
+    return scaled
+
