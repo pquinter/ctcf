@@ -927,7 +927,7 @@ def concat_movies(movies, nrows=1):
         conc_mov.append(np.vstack(currframes))
     return np.stack(conc_mov)
 
-def regionprops2df(regionprops, props = ('label','area','coords',
+def regionprops2df(regionprops, props = ('label','area','bbox',
     'intensity_image', 'mean_intensity','max_intensity','min_intensity')):
     """
     Convert list of region properties to dataframe
