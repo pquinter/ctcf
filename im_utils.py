@@ -944,7 +944,7 @@ def regionprops2df(regionprops, props = ('label','area','bbox',
     if not isinstance(regionprops, list): regionprops = [regionprops]
     return pd.DataFrame([[r[p] for p in props] for r in regionprops],columns=props)
 
-def tracking_movie(movie, tracks):
+def tracking_movie(movie, tracks, x='x', y='y'):
     """
     Label particles being tracked on movie for visualization
 
@@ -962,8 +962,8 @@ def tracking_movie(movie, tracks):
     """
     movie_tracks = np.empty_like(movie)
     for f, im in enumerate(movie):
-        coords = tracks[tracks.frame==f][['x','y']]
-        circles = [circle_perimeter(int(c[1].y), int(c[1].x), 10,
+        coords = tracks[tracks.frame==f][[x, y]]
+        circles = [circle_perimeter(int(c[1][y]), int(c[1][x]), 10,
                         shape=im.shape) for c in coords.iterrows()]
         im_plot = im.copy()
         for circle in circles:
