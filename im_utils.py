@@ -961,8 +961,12 @@ def tracking_movie(movie, tracks, x='x', y='y'):
 
     """
     movie_tracks = np.empty_like(movie)
+    # correct frame counter in case movie skips frames
+    if len(movie) == len(tracks.frame.unique()):
+        frame_counter = tracks.frame.unique()
+    else: frame_counter = np.arange(len(movie))
     for f, im in enumerate(movie):
-        coords = tracks[tracks.frame==f][[x, y]]
+        coords = tracks[tracks.frame==frame_counter[f]][[x, y]]
         circles = [circle_perimeter(int(c[1][y]), int(c[1][x]), 10,
                         shape=im.shape) for c in coords.iterrows()]
         im_plot = im.copy()
