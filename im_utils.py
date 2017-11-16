@@ -21,6 +21,7 @@ import skimage
 from skimage import io, morphology
 from skimage.filters import threshold_adaptive
 from skimage.draw import circle_perimeter
+from skimage.external.tifffile import TiffFile
 from scipy import ndimage
 
 from numba import jit
@@ -934,7 +935,7 @@ def regionprops2df(regionprops, props = ('label','area','bbox',
 
     Arguments
     ---------
-    regionprops: skimage.measure._regionprops object
+    regionprops: list of skimage.measure._regionprops objects
     props: list of str, properties to store
 
     Returns
@@ -967,8 +968,8 @@ def tracking_movie(movie, tracks, x='x', y='y'):
     else: frame_counter = np.arange(len(movie))
     for f, im in enumerate(movie):
         coords = tracks[tracks.frame==frame_counter[f]][[x, y]]
-        circles = [circle_perimeter(int(c[1][y]), int(c[1][x]), 10,
-                        shape=im.shape) for c in coords.iterrows()]
+        circles = [circle_perimeter(int(c[y]), int(c[x]), 10,
+                        shape=im.shape) for (_, c) in coords.iterrows()]
         im_plot = im.copy()
         for circle in circles:
             im_plot[circle] = np.max(im_plot)
@@ -996,3 +997,28 @@ def normalize(movie):
         scaled[i] = (frame - np.min(frame)) / (np.max(frame) - np.min(frame))
     return scaled
 
+def load_zproject_STKcollection(load_pattern, savedir=None):
+    """
+    Load collection or single STK files and do maximum intensity projection
+
+    Arguments
+    ---------
+    load_pattern: str
+        pattern of file paths
+    savedir: str
+        directory to save projected images
+
+    Returns
+    ---------
+    projected: nd array or np stack
+        projected images
+
+    """
+    collection = io.ImageCollection(load_pattern, load_func=TiffFile)
+    projected = [z_project(zseries.asarray()) for zseries in collection]
+    if len(collection)>1:
+        projected = np.stack(projected)
+    else: projected = projected[0]
+    if savedir:
+        io.imsave(savedir, projected)
+    return projected
