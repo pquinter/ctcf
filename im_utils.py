@@ -18,7 +18,7 @@ import glob
 import os
 
 import skimage
-from skimage import io, morphology
+from skimage import io, morphology, segmentation
 from skimage.filters import threshold_adaptive
 from skimage.draw import circle_perimeter
 from skimage.external.tifffile import TiffFile
@@ -340,6 +340,7 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.m
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh, selem=selem)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
+    im_thresh = skimage.segmentation.clear_border(im_thresh)
     return im_thresh
 
 def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
@@ -996,6 +997,25 @@ def normalize(movie):
         frame = movie[i]
         scaled[i] = (frame - np.min(frame)) / (np.max(frame) - np.min(frame))
     return scaled
+
+@jit(nopython=True)
+def normalize_im(im):
+    """
+    min-max scaler for an image, to fix int values in the range [0, 1]
+
+    Arguments
+    ---------
+    im: array
+        im to normalize
+
+    Returns
+    ---------
+    scaled: array
+        normalized copy of the image
+    """
+    scaled = (im - np.min(im)) / (np.max(im) - np.min(im))
+    return scaled
+
 
 def load_zproject_STKcollection(load_pattern, savedir=None):
     """
