@@ -1016,7 +1016,6 @@ def normalize_im(im):
     scaled = (im - np.min(im)) / (np.max(im) - np.min(im))
     return scaled
 
-
 def load_zproject_STKcollection(load_pattern, savedir=None):
     """
     Load collection or single STK files and do maximum intensity projection
@@ -1042,3 +1041,163 @@ def load_zproject_STKcollection(load_pattern, savedir=None):
     if savedir:
         io.imsave(savedir, projected)
     return projected
+
+
+def im_block(ims, cols, norm=True):
+    """
+    Construct block of images
+
+    Arguments
+    ---------
+    ims: array or iterable of arrays
+        images to concatenate in block
+    cols: int
+        number of columns in image block
+    norm: bool
+        whether to normalize/scale each image
+
+    Returns
+    ---------
+    block: array
+
+    """
+    if norm:
+        ims = normalize(ims)
+    nrows = int(ims.shape[0]/cols)
+    xdim, ydim = ims.shape[1:]
+    block = []
+    for c in np.arange(0, cols*nrows, cols):
+        block.append(np.hstack(ims[c:c+cols]))
+    block = np.vstack(block)
+    return block
+
+
+def get_bbox(center, size=10, im=None, return_im=True, pad=2):
+    """
+    Get square bounding box around center
+
+    Arguments
+    ---------
+    center: tuple
+        x, y coordinates
+    size: int
+        size of the bounding box in pixels
+    im: 2D array
+        image to extract window from
+    return_im: bool
+        whether to return the bbox image or just coordinates
+    pad: int
+        size of padding around returned image
+
+    Returns
+    ---------
+    scaled: array
+        normalized copy of the image
+
+    """
+    x, y = center
+    x, y = int(x), int(y)
+    # get bbox coordinates
+    s = int(size/2)
+    bbox = np.s_[y-s:y+s, x-s:x+s]
+    if return_im:
+        # get bbox image
+        im_bbox = im[bbox]
+        if pad:
+            im_bbox = np.pad(im_bbox, pad, 'constant', constant_values=0)
+        return im_bbox
+    else: return bbox
+
+def check_borders(coords, im, s):
+    """
+    Check if coords are closer than `s` pixels to borders of `im`
+    Return False if too close, convenient for indexing
+
+    Arguments
+    ---------
+    coords: tuple
+        x, y coordinates
+    im: 2D array
+        image to check
+    s: int
+        distance to border to check, in pixels
+
+    Returns
+    ---------
+    boolean
+        True if within border, False if not
+
+    """
+    dimx, dimy = im.shape
+    x, y = coords
+    return (x>s)&(x+s<dimx)&(y>s)&(y+s<dimy)
+
+def sel_training(peaks_df, ims_dict, s=10, nrows=50, cmap='viridis'):
+    """
+    Manual click-selection of training set.
+    Use a large screen if number of candidate objects is large!
+
+    Arguments
+    ---------
+    peaks_df: DataFrame
+        df with object coordinates and corresponding image name.
+        Must contain columns ['x','y','imname']
+    ims_dict: dictionary
+        dict of images. Keys must be the same as `imname`s in peaks_df
+    s: int
+        size of bounding box to get from image around object coordinates
+    nrows: int
+        number of rows of images to display
+
+    Returns
+    ---------
+    sel_bool: boolean array
+        Can be used to index original `peaks` dataframe. True for selected ims.
+    all_ims: array
+        Screened objects. To get selected images, index: all_ims[sel_bool]
+
+    """
+
+    # create id first keep track of original rows
+    peaks = peaks_df.copy()
+    # clear peaks too close to image border
+    not_inborder = peaks.apply(lambda x: check_borders(x[['x','y']],
+                                            ims_dict[x.imname], s), axis=1)
+    peaks = peaks.loc[not_inborder]
+    peaks['uid'] = np.arange(len(peaks))
+    # get s by s squares containing spots
+    peaks_ims = peaks.apply(lambda x: [normalize_im(get_bbox(x[['x','y']],
+                            ims_dict[x.imname], s))], axis=1)
+    # append extra frames if necessary to make square array with nrows
+    extra_frames, im_shape = len(peaks_ims)%nrows, peaks_ims.iloc[0][0].shape
+    if extra_frames > 0:
+        add_frames = nrows-extra_frames
+        peaks_ims = peaks_ims.append(pd.Series([[np.zeros(im_shape)]\
+                                for f in range(add_frames)]))
+    # concatenate squares for selection
+    peaks_imsconcat = concat_movies(peaks_ims, nrows=nrows)[0]
+    # create s by s squares with labels to track selection and concatenate
+    labels = [[np.full(im_shape, l)] for l in range(len(peaks_ims))]
+    labels = concat_movies(labels, nrows=nrows)[0]
+    # display for click selection
+    fig, ax = plt.subplots(1, figsize=(25.6, 13.6))
+    ax.set_title('click to select; ctrl+click to undo last click; alt+click to finish')
+    ax.imshow(peaks_imsconcat, cmap=cmap)# array of frames for visual sel
+    ax.imshow(labels, alpha=0.0)# overlay array of squares with invisible labels
+    # yticks for guidance, take into account padding
+    ax.set_yticks(np.arange(s+4, nrows*1.1*(s+4), 10))
+    plt.tight_layout()
+    # get labels by click
+    coords = plt.ginput(10000, timeout=0, show_clicks=True)
+    plt.close('all')
+    if len(coords)>0:
+        # filter selected labels
+        selected = {labels[int(c1), int(c2)] for (c2, c1) in coords}
+    else: selected = []
+    # get boolean array of selected for indexing original df
+    sel_bool = peaks.uid.isin(selected).values
+    # get selected images, without padding nor normalizing. Need to fetch originals again
+    peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']],
+                    ims_dict[x.imname], s, pad=False)], axis=1)
+    all_ims  = np.stack([i[0] for i in peaks_ims])
+    return sel_bool, all_ims
