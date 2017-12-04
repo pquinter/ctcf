@@ -1,5 +1,5 @@
 """
-Utilities for C. elegans image analysis 
+Utilities for image analysis 
 
 Author: Porfirio Quintero-Cadena
 """
@@ -1072,7 +1072,7 @@ def im_block(ims, cols, norm=True):
     return block
 
 
-def get_bbox(center, size=10, im=None, return_im=True, pad=2):
+def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     """
     Get square bounding box around center
 
@@ -1088,6 +1088,8 @@ def get_bbox(center, size=10, im=None, return_im=True, pad=2):
         whether to return the bbox image or just coordinates
     pad: int
         size of padding around returned image
+    mark_center: bool
+        whether to draw a cross to mark image center
 
     Returns
     ---------
@@ -1098,13 +1100,16 @@ def get_bbox(center, size=10, im=None, return_im=True, pad=2):
     x, y = center
     x, y = int(x), int(y)
     # get bbox coordinates
-    s = int(size/2)
-    bbox = np.s_[y-s:y+s, x-s:x+s]
+    s = size//2
+    bbox = np.s_[y-s:y+s+1, x-s:x+s+1]
     if return_im:
         # get bbox image
-        im_bbox = im[bbox]
+        im_bbox = im[bbox].copy()
+        if mark_center:
+            im_bbox[s-1:s+2,s] = np.min(im_bbox)
+            im_bbox[s,s-1:s+2] = np.min(im_bbox)
         if pad:
-            im_bbox = np.pad(im_bbox, pad, 'constant', constant_values=0)
+            im_bbox = np.pad(im_bbox, pad, 'constant', constant_values=np.min(im_bbox))
         return im_bbox
     else: return bbox
 
@@ -1132,7 +1137,8 @@ def check_borders(coords, im, s):
     x, y = coords
     return (x>s)&(x+s<dimx)&(y>s)&(y+s<dimy)
 
-def sel_training(peaks_df, ims_dict, s=10, nrows=50, cmap='viridis'):
+def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
+        mark_center=True):
     """
     Manual click-selection of training set.
     Use a large screen if number of candidate objects is large!
@@ -1148,6 +1154,13 @@ def sel_training(peaks_df, ims_dict, s=10, nrows=50, cmap='viridis'):
         size of bounding box to get from image around object coordinates
     nrows: int
         number of rows of images to display
+    cmap: str
+        matplotlib colormap to display images with
+    scale: float
+        how to scale images to improve visibility for selection.
+        Range is scaled from min to scale*max
+    mark_center: bool
+        whether to mark center of each image for selection
 
     Returns
     ---------
@@ -1164,10 +1177,11 @@ def sel_training(peaks_df, ims_dict, s=10, nrows=50, cmap='viridis'):
     not_inborder = peaks.apply(lambda x: check_borders(x[['x','y']],
                                             ims_dict[x.imname], s), axis=1)
     peaks = peaks.loc[not_inborder]
-    peaks['uid'] = np.arange(len(peaks))
+    # add unique identifier if not already in dataframe
+    if not 'uid' in peaks.columns: peaks['uid'] = np.arange(len(peaks))
     # get s by s squares containing spots
-    peaks_ims = peaks.apply(lambda x: [normalize_im(get_bbox(x[['x','y']],
-                            ims_dict[x.imname], s))], axis=1)
+    peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+                            ims_dict[x.imname], mark_center=mark_center)], axis=1)
     # append extra frames if necessary to make square array with nrows
     extra_frames, im_shape = len(peaks_ims)%nrows, peaks_ims.iloc[0][0].shape
     if extra_frames > 0:
@@ -1176,8 +1190,12 @@ def sel_training(peaks_df, ims_dict, s=10, nrows=50, cmap='viridis'):
                                 for f in range(add_frames)]))
     # concatenate squares for selection
     peaks_imsconcat = concat_movies(peaks_ims, nrows=nrows)[0]
+    # scale dynamic range to min-2xmedian to improve visibility
+    peaks_imsconcat = np.clip(peaks_imsconcat, np.min(peaks_imsconcat),
+            scale*np.max(peaks_imsconcat))
     # create s by s squares with labels to track selection and concatenate
-    labels = [[np.full(im_shape, l)] for l in range(len(peaks_ims))]
+    labels = [[np.full(im_shape, l)] for l in np.concatenate((peaks.uid.values,
+                                np.full(extra_frames, np.max(peaks.uid)+1)))]
     labels = concat_movies(labels, nrows=nrows)[0]
     # display for click selection
     fig, ax = plt.subplots(1, figsize=(25.6, 13.6))
@@ -1197,7 +1215,7 @@ def sel_training(peaks_df, ims_dict, s=10, nrows=50, cmap='viridis'):
     # get boolean array of selected for indexing original df
     sel_bool = peaks.uid.isin(selected).values
     # get selected images, without padding nor normalizing. Need to fetch originals again
-    peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']],
-                    ims_dict[x.imname], s, pad=False)], axis=1)
+    peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+                    ims_dict[x.imname], pad=False)], axis=1)
     all_ims  = np.stack([i[0] for i in peaks_ims])
     return sel_bool, all_ims
