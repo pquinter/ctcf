@@ -19,7 +19,7 @@ import os
 
 import skimage
 from skimage import io, morphology, segmentation
-from skimage.filters import threshold_adaptive
+from skimage.filters import threshold_local
 from skimage.draw import circle_perimeter
 from skimage.external.tifffile import TiffFile
 from scipy import ndimage
@@ -335,7 +335,7 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.m
         thresholded binary image 
     """
     if im_thresh is None:
-        im_thresh = threshold_adaptive(im, block_size)
+        im_thresh = threshold_local(im, block_size)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh, selem=selem)
@@ -524,8 +524,7 @@ def interpixel_dist(im, ref_length):
     Returns
     ---------
     interpixel_distance: float
-        interpixel distance in the same units as reference length 
-                            (e.g. 50um for a C. elegans egg)
+        number of pixels per unit of reference length
     """
     io.imshow(im)
     xy = plt.ginput(2)
@@ -1093,8 +1092,8 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
 
     Returns
     ---------
-    scaled: array
-        normalized copy of the image
+    im_bbox or bbox: array or numpy slice
+        image bounding box
 
     """
     x, y = center
@@ -1110,6 +1109,38 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
             im_bbox[s,s-1:s+2] = np.min(im_bbox)
         if pad:
             im_bbox = np.pad(im_bbox, pad, 'constant', constant_values=np.min(im_bbox))
+        return im_bbox
+    else: return bbox
+
+def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
+    """
+    Get square bounding box around center
+
+    Arguments
+    ---------
+    center: tuple
+        x, y coordinates
+    size: int
+        size of the bounding box in pixels
+    im: 2D array
+        image to extract window from
+    return_im: bool
+        whether to return the bbox image or just coordinates
+
+    Returns
+    ---------
+    im_bbox or bbox: array or numpy slice
+        image bounding box
+
+    """
+    x, y, z = center
+    x, y, z = int(x), int(y), int(z)
+    # get bbox coordinates
+    s = size//2
+    bbox = np.s_[z-s:z+s+1,y-s:y+s+1, x-s:x+s+1]
+    if return_im:
+        # get bbox image
+        im_bbox = im[bbox].copy()
         return im_bbox
     else: return bbox
 
