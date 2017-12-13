@@ -186,7 +186,8 @@ def rectangleROI(im, thresh=None):
 
     return roi_coords
 
-def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim, major_ax_lim, area_lim):
+def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim, 
+        major_ax_lim, area_lim, watershed=False):
     """
     Create and label markers from image mask, 
     filter by area and compute region properties
@@ -195,6 +196,10 @@ def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim, major_ax_lim, area_lim)
     ---------
     im: array_like
         input image
+    im_mask: boolean array
+        image mask
+    watershed: boolean
+        whether to perform watershed on markers
     feature_lim: iterable of two
         minimum and maximum bounds for each feature, inclusive
 
@@ -206,6 +211,14 @@ def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim, major_ax_lim, area_lim)
         list of region properties of each labeled object
     """
     markers = morphology.label(im_mask)
+    if watershed:
+        # harsh erosion to get basins for watershed
+        im_mask_eroded = skimage.measure.label(\
+                skimage.morphology.binary_erosion(im_mask,
+                selem=skimage.morphology.disk(8)))
+        # watershed transform using eroded cells as basins
+        markers = skimage.morphology.watershed(markers,
+                im_mask_eroded, mask=im_mask)
     nuclei = skimage.measure.regionprops(markers, im)
     # get only markers within area bounds, above intensity thersh and 
     # not oversaturated
@@ -309,7 +322,8 @@ def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
     plt.tight_layout()
     return None
 
-def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.morphology.disk(15)):
+def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.morphology.disk(15),
+        clear_border=True):
     """
     Create a binary mask to segment nuclei using adaptive threshold.
     Useful to find nuclei of varying intensities.
@@ -340,7 +354,8 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.m
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh, selem=selem)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
-    im_thresh = skimage.segmentation.clear_border(im_thresh)
+    if clear_border:
+        im_thresh = skimage.segmentation.clear_border(im_thresh)
     return im_thresh
 
 def manual_sel(im_r, markers_r, nuclei_r, im_g, markers_g, nuclei_g):
@@ -1164,12 +1179,16 @@ def check_borders(coords, im, s):
         True if within border, False if not
 
     """
-    dimx, dimy = im.shape
+    try:
+        dimx, dimy = im.shape
+    # if it is a movie, get dimensions
+    except ValueError:
+        dimz, dimx, dimy = im.shape
     x, y = coords
     return (x>s)&(x+s<dimx)&(y>s)&(y+s<dimy)
 
 def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
-        mark_center=True):
+        mark_center=True, movie=False):
     """
     Manual click-selection of training set.
     Use a large screen if number of candidate objects is large!
@@ -1192,6 +1211,8 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
         Range is scaled from min to scale*max
     mark_center: bool
         whether to mark center of each image for selection
+    movie: bool
+        True ims_dict contains movies
 
     Returns
     ---------
@@ -1202,7 +1223,6 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
 
     """
 
-    # create id first keep track of original rows
     peaks = peaks_df.copy()
     # clear peaks too close to image border
     not_inborder = peaks.apply(lambda x: check_borders(x[['x','y']],
@@ -1211,8 +1231,12 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
     # add unique identifier if not already in dataframe
     if not 'uid' in peaks.columns: peaks['uid'] = np.arange(len(peaks))
     # get s by s squares containing spots
-    peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
-                            ims_dict[x.imname], mark_center=mark_center)], axis=1)
+    if movie: # also need to get frame
+         peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+                ims_dict[x.imname][x.frame], mark_center=mark_center)], axis=1)
+    else:
+        peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+                ims_dict[x.imname], mark_center=mark_center)], axis=1)
     # append extra frames if necessary to make square array with nrows
     extra_frames, im_shape = len(peaks_ims)%nrows, peaks_ims.iloc[0][0].shape
     if extra_frames > 0:
@@ -1246,7 +1270,11 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
     # get boolean array of selected for indexing original df
     sel_bool = peaks.uid.isin(selected).values
     # get selected images, without padding nor normalizing. Need to fetch originals again
-    peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+    if movie: # also need to get frame
+         peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+                ims_dict[x.imname][x.frame], pad=False)], axis=1)
+    else:
+        peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
                     ims_dict[x.imname], pad=False)], axis=1)
     all_ims  = np.stack([i[0] for i in peaks_ims])
     return sel_bool, all_ims
