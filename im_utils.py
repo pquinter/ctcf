@@ -215,7 +215,7 @@ def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim,
         # harsh erosion to get basins for watershed
         im_mask_eroded = skimage.measure.label(\
                 skimage.morphology.binary_erosion(im_mask,
-                selem=skimage.morphology.disk(8)))
+                selem=skimage.morphology.diamond(8)))
         # watershed transform using eroded cells as basins
         markers = skimage.morphology.watershed(markers,
                 im_mask_eroded, mask=im_mask)
@@ -1095,7 +1095,8 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     center: tuple
         x, y coordinates
     size: int
-        size of the bounding box in pixels
+        size of the bounding box in pixels.
+        Must be an odd number, or it will be round up.
     im: 2D array
         image to extract window from
     return_im: bool
@@ -1197,7 +1198,7 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
     ---------
     peaks_df: DataFrame
         df with object coordinates and corresponding image name.
-        Must contain columns ['x','y','imname']
+        Must contain columns ['x','y','imname'] and 'frame' for movie
     ims_dict: dictionary
         dict of images. Keys must be the same as `imname`s in peaks_df
     s: int
@@ -1245,7 +1246,7 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
                                 for f in range(add_frames)]))
     # concatenate squares for selection
     peaks_imsconcat = concat_movies(peaks_ims, nrows=nrows)[0]
-    # scale dynamic range to min-2xmedian to improve visibility
+    # scale dynamic range to improve visibility
     peaks_imsconcat = np.clip(peaks_imsconcat, np.min(peaks_imsconcat),
             scale*np.max(peaks_imsconcat))
     # create s by s squares with labels to track selection and concatenate
@@ -1278,3 +1279,45 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
                     ims_dict[x.imname], pad=False)], axis=1)
     all_ims  = np.stack([i[0] for i in peaks_ims])
     return sel_bool, all_ims
+
+def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False):
+    """
+    Classify images from dataframe
+
+    Arguments
+    ---------
+    spot_df: dataframe
+        Must contain columns ['x','y','imname'] for images and 'frame' for movie
+    clf: classifier object
+    im_dict: dictionary
+        with images to extract spots images frmo
+    s: int
+        size of bounding box to get from image around object coordinates
+    movie: bool
+        whether its a movie or not
+
+    Returns
+    -------
+    spot_clf: dataframe
+        copy of original dataframe with predicted labels, with cleared borders
+
+    """
+    spot_clf = spot_df.copy()
+    # clear spot_clf too close to borders
+    spot_clf = spot_clf[spot_clf.apply(lambda x: check_borders(x[['x','y']],
+                                            im_dict[x.imname], s), axis=1)]
+    # get spot images
+    if movie: # get frame too
+        spot_ims = spot_clf.apply(lambda x: [get_bbox(x[['x','y']], s,
+                    im_dict[x.imname][x.frame], pad=False)], axis=1)
+    else:
+        spot_ims = spot_clf.apply(lambda x: [get_bbox(x[['x','y']], s,
+                    im_dict[x.imname], pad=False)], axis=1)
+    # convert to stack and ravel for classification
+    spot_ims  = np.stack([i[0] for i in spot_ims])
+    spot_ims = np.stack([np.ravel(i) for i in spot_ims])
+    # classify
+    labels_pred = clf.predict(spot_ims)
+    # add labels
+    spot_clf['svm_label'] = labels_pred
+    return spot_clf
