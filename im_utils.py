@@ -335,7 +335,7 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.m
         thresholded binary image 
     """
     if im_thresh is None:
-        im_thresh = threshold_local(im, block_size)
+        im_thresh = im>threshold_local(im, block_size)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh, selem=selem)
