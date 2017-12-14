@@ -1317,7 +1317,7 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     all_ims  = np.stack([i[0] for i in peaks_ims])
     return sel_bool, all_ims
 
-def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False):
+def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
     """
     Classify images from dataframe
 
@@ -1337,24 +1337,44 @@ def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False):
     -------
     spot_clf: dataframe
         copy of original dataframe with predicted labels, with cleared borders
+    spot_ims: array
+        all the images specified in spot_df
 
     """
     spot_clf = spot_df.copy()
     # clear spot_clf too close to borders
     spot_clf = spot_clf[spot_clf.apply(lambda x: check_borders(x[['x','y']],
                                             im_dict[x.imname], s), axis=1)]
-    # get spot images
-    if movie: # get frame too
-        spot_ims = spot_clf.apply(lambda x: [get_bbox(x[['x','y']], s,
-                    im_dict[x.imname][x.frame], pad=False)], axis=1)
-    else:
-        spot_ims = spot_clf.apply(lambda x: [get_bbox(x[['x','y']], s,
-                    im_dict[x.imname], pad=False)], axis=1)
-    # convert to stack and ravel for classification
-    spot_ims  = np.stack([i[0] for i in spot_ims])
-    spot_ims = np.stack([np.ravel(i) for i in spot_ims])
+    spot_ims = get_batch_bbox(spot_clf, im_dict, size=s, movie=movie)
+    if norm:
+        spot_ims = normalize(spot_ims)
+    # ravel for classif
+    spot_ims_r = np.stack([np.ravel(i) for i in spot_ims])
     # classify
-    labels_pred = clf.predict(spot_ims)
+    labels_pred = clf.predict(spot_ims_r)
     # add labels
-    spot_clf['svm_label'] = labels_pred
-    return spot_clf
+    spot_clf['plabel'] = labels_pred
+    return spot_clf, spot_ims
+
+def filter_parts(spot_df, thresh=2):
+    """
+    Filter out trajectories less than 'thresh' number of points matching label
+
+    Arguments
+    ----------
+    spot_df : DataFrame
+        must include columns named 'pid' with unique particle id
+        and 'plabel' with particle label (True or False)
+    thresh: int
+        minimum number of True labeled points in trajectory to survive
+
+    Returns
+    -------
+    good_parts: DataFrame
+        subset of trajectories
+
+    """
+    pids, counts = np.unique(spot_df[spot_df.plabel==True].pid.values, return_counts=True)
+    good_parts = pids[counts>2]
+    good_parts = spot_df[spot_df.pid.isin(good_parts)]
+    return good_parts
