@@ -75,7 +75,8 @@ def z_project(stack, project='max'):
 
     return z_im
 
-def plot_gallery(images, n_row=3, n_col=4, fig_title=None):
+def plot_gallery(images, n_row=3, n_col=4, reshape=None,
+        cmap='viridis', titles=None, fig_title=None):
     """
     Helper function to plot a gallery of images
 
@@ -86,8 +87,12 @@ def plot_gallery(images, n_row=3, n_col=4, fig_title=None):
     n_row, n_col: integer
             number of rows and columns in plot
             If less than number of images, truncates to plot n_row * n_col
-    fig_title: string
-            optional figure title
+    reshape: None or tuple of two height and width int
+            reshape each image to h and w
+    cmap: string
+        name of matplotlib colormap
+    titles, fig_title: string
+            optional subaxes and figure title
 
     Returns
     ---------
@@ -97,7 +102,12 @@ def plot_gallery(images, n_row=3, n_col=4, fig_title=None):
     fig = plt.figure(figsize=(1.8 * n_col, 2.4 * n_row))
     for i in range(n_row * n_col):
         ax = fig.add_subplot(n_row, n_col, i + 1)
-        ax.imshow(images[i], cmap=plt.cm.viridis)
+        if reshape:
+            ax.imshow(images[i].reshape((h, w)), cmap=cmap)
+        else:
+            ax.imshow(images[i], cmap=cmap)
+        if titles:
+            ax.set_title(titles[i], size=12)
         plt.xticks(())
         plt.yticks(())
     if fig_title: fig.suptitle(fig_title+'\n', fontsize=20)
