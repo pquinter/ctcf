@@ -1056,7 +1056,6 @@ def load_zproject_STKcollection(load_pattern, savedir=None):
         io.imsave(savedir, projected)
     return projected
 
-
 def im_block(ims, cols, norm=True):
     """
     Construct block of images
@@ -1084,7 +1083,6 @@ def im_block(ims, cols, norm=True):
         block.append(np.hstack(ims[c:c+cols]))
     block = np.vstack(block)
     return block
-
 
 def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     """
@@ -1127,6 +1125,43 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
             im_bbox = np.pad(im_bbox, pad, 'constant', constant_values=np.min(im_bbox))
         return im_bbox
     else: return bbox
+
+def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
+        pad=0, mark_center=0):
+    """
+    Get square bounding boxes in batch around center coords from dataframe
+
+    Arguments
+    ---------
+    bbox_df: DataFrame
+        df with object coordinates and corresponding image name.
+        Must contain columns ['x','y','imname'] and 'frame' for movie
+    ims_dict: dictionary
+        dict of images. Keys must be the same as `imname`s in peaks_df
+    size: int
+        size of bounding box to get from image around object coordinates
+    movie: bool
+        True if ims_dict contains movies
+    pad: int
+        Padding to add to each image.
+    mark_center: bool
+        whether to mark center of each image
+
+    Returns
+    ---------
+    ims_array: stack
+        stack of images
+
+    """
+
+    if movie:
+        ims_df = pp7.apply(lambda x: [get_bbox(x[['x','y']], 9,
+                ims_dict[x.imname][x.frame], mark_center=mark_center, pad=pad)], axis=1)
+    else:
+        ims_df = pp7.apply(lambda x: [get_bbox(x[['x','y']], 9,
+                ims_dict[x.imname], mark_center=mark_center, pad=pad)], axis=1)
+    ims_array = np.stack([i[0] for i in ims_df])
+    return ims_array
 
 def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     """
