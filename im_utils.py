@@ -1188,8 +1188,8 @@ def check_borders(coords, im, s):
     x, y = coords
     return (x>s)&(x+s<dimx)&(y>s)&(y+s<dimy)
 
-def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
-        mark_center=True, movie=False):
+def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
+        mark_center=True, movie=False, normall=False):
     """
     Manual click-selection of training set.
     Use a large screen if number of candidate objects is large!
@@ -1203,8 +1203,6 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
         dict of images. Keys must be the same as `imname`s in peaks_df
     s: int
         size of bounding box to get from image around object coordinates
-    nrows: int
-        number of rows of images to display
     cmap: str
         matplotlib colormap to display images with
     scale: float
@@ -1214,6 +1212,9 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
         whether to mark center of each image for selection
     movie: bool
         True ims_dict contains movies
+    normall: bool
+        Whether to normalize each image to [0,1] range.
+        Might help visualization but hurt image comparison.
 
     Returns
     ---------
@@ -1229,8 +1230,8 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
     not_inborder = peaks.apply(lambda x: check_borders(x[['x','y']],
                                             ims_dict[x.imname], s), axis=1)
     peaks = peaks.loc[not_inborder]
-    # add unique identifier if not already in dataframe
-    if not 'uid' in peaks.columns: peaks['uid'] = np.arange(len(peaks))
+    # add unique identifier
+    peaks['uid'] = np.arange(len(peaks))
     # get s by s squares containing spots
     if movie: # also need to get frame
          peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
@@ -1238,35 +1239,36 @@ def sel_training(peaks_df, ims_dict, s=9, nrows=50, cmap='viridis', scale=0.1,
     else:
         peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
                 ims_dict[x.imname], mark_center=mark_center)], axis=1)
-    # append extra frames if necessary to make square array with nrows
-    extra_frames, im_shape = len(peaks_ims)%nrows, peaks_ims.iloc[0][0].shape
+    # append extra frames if necessary to make square array with ncols
+    extra_frames, im_shape = len(peaks_ims)%ncols, peaks_ims.iloc[0][0].shape
     if extra_frames > 0:
-        add_frames = nrows-extra_frames
+        add_frames = ncols-extra_frames
         peaks_ims = peaks_ims.append(pd.Series([[np.zeros(im_shape)]\
                                 for f in range(add_frames)]))
-    # concatenate squares for selection
-    peaks_imsconcat = concat_movies(peaks_ims, nrows=nrows)[0]
-    # scale dynamic range to improve visibility
+    # concatenate squares for selection (normalize each image if requested)
+    peaks_ims = np.stack([i[0] for i in peaks_ims])
+    peaks_imsconcat = im_block(peaks_ims, cols=ncols, norm=normall)
+    # scale dynamic range to improve visibility, if scale<1
     peaks_imsconcat = np.clip(peaks_imsconcat, np.min(peaks_imsconcat),
             scale*np.max(peaks_imsconcat))
     # create s by s squares with labels to track selection and concatenate
-    labels = [[np.full(im_shape, l)] for l in np.concatenate((peaks.uid.values,
-                                np.full(extra_frames, np.max(peaks.uid)+1)))]
-    labels = concat_movies(labels, nrows=nrows)[0]
+    labels = np.stack([np.full(im_shape, l) for l in np.concatenate((peaks.uid.values,
+                                np.full(add_frames, np.max(peaks.uid)+1)))])
+    labels_concat = im_block(labels, cols=ncols, norm=0)
     # display for click selection
     fig, ax = plt.subplots(1, figsize=(25.6, 13.6))
     ax.set_title('click to select; ctrl+click to undo last click; alt+click to finish')
     ax.imshow(peaks_imsconcat, cmap=cmap)# array of frames for visual sel
-    ax.imshow(labels, alpha=0.0)# overlay array of squares with invisible labels
+    ax.imshow(labels_concat, alpha=0.0)# overlay array of squares with invisible labels
     # yticks for guidance, take into account padding
-    ax.set_yticks(np.arange(s+4, nrows*1.1*(s+4), 10))
+    ax.set_yticks(np.arange(s+4, len(peaks_ims)/ncols*1.1*(s+4), 10))
     plt.tight_layout()
     # get labels by click
     coords = plt.ginput(10000, timeout=0, show_clicks=True)
     plt.close('all')
     if len(coords)>0:
         # filter selected labels
-        selected = {labels[int(c1), int(c2)] for (c2, c1) in coords}
+        selected = {labels_concat[int(c1), int(c2)] for (c2, c1) in coords}
     else: selected = []
     # get boolean array of selected for indexing original df
     sel_bool = peaks.uid.isin(selected).values
