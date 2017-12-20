@@ -1165,10 +1165,10 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
     """
 
     if movie:
-        ims_df = pp7.apply(lambda x: [get_bbox(x[['x','y']], 9,
+        ims_df = bbox_df.apply(lambda x: [get_bbox(x[['x','y']], 9,
                 ims_dict[x.imname][x.frame], mark_center=mark_center, pad=pad)], axis=1)
     else:
-        ims_df = pp7.apply(lambda x: [get_bbox(x[['x','y']], 9,
+        ims_df = bbox_df.apply(lambda x: [get_bbox(x[['x','y']], 9,
                 ims_dict[x.imname], mark_center=mark_center, pad=pad)], axis=1)
     ims_array = np.stack([i[0] for i in ims_df])
     return ims_array
