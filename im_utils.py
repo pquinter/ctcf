@@ -1123,8 +1123,11 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     x, y = center
     x, y = int(x), int(y)
     # get bbox coordinates
+    # if can't get full bbox, get partial and avoid negative values
     s = size//2
-    bbox = np.s_[y-s:y+s+1, x-s:x+s+1]
+    ys = np.max((0, y-s))
+    xs = np.max((0, x-s))
+    bbox = np.s_[ys:y+s+1, xs:x+s+1]
     if return_im:
         # get bbox image
         im_bbox = im[bbox].copy()
