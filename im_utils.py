@@ -1140,7 +1140,7 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     else: return bbox
 
 def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
-        pad=0, mark_center=0):
+        pad=0, mark_center=0, im3d=False):
     """
     Get square bounding boxes in batch around center coords from dataframe
 
@@ -1152,7 +1152,8 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
     ims_dict: dictionary
         dict of images. Keys must be the same as `imname`s in peaks_df
     size: int
-        size of bounding box to get from image around object coordinates
+        xy size of bounding box to get from image around object coordinates.
+        If 3d, size in z is 5 by default.
     movie: bool
         True if ims_dict contains movies
     pad: int
@@ -1167,16 +1168,22 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
 
     """
 
+    if im3d: 
+        _getbboxfunc = get_bbox3d
+        coords = ['x','y','z']
+    else:
+        _getbboxfunc = get_bbox
+        coords = ['x','y']
     if movie:
-        ims_df = bbox_df.apply(lambda x: [get_bbox(x[['x','y']], 9,
+        ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
                 ims_dict[x.imname][x.frame], mark_center=mark_center, pad=pad)], axis=1)
     else:
-        ims_df = bbox_df.apply(lambda x: [get_bbox(x[['x','y']], 9,
+        ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
                 ims_dict[x.imname], mark_center=mark_center, pad=pad)], axis=1)
     ims_array = np.stack([i[0] for i in ims_df])
     return ims_array
 
-def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
+def get_bbox3d(center, size_xy=9, im=None, return_im=True, pad=2, mark_center=False, size_z=5):
     """
     Get square bounding box around center
 
@@ -1184,7 +1191,7 @@ def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False
     ---------
     center: tuple
         x, y coordinates
-    size: int
+    size_xy, size_z: int
         size of the bounding box in pixels
     im: 2D array
         image to extract window from
@@ -1200,8 +1207,9 @@ def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False
     x, y, z = center
     x, y, z = int(x), int(y), int(z)
     # get bbox coordinates
-    s = size//2
-    bbox = np.s_[z-s:z+s+1,y-s:y+s+1, x-s:x+s+1]
+    sxy = size_xy//2
+    sz = size_z//2
+    bbox = np.s_[z-sz:z+sz+1,y-sxy:y+sxy+1, x-sxy:x+sxy+1]
     if return_im:
         # get bbox image
         im_bbox = im[bbox].copy()
@@ -1289,6 +1297,7 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
                 ims_dict[x.imname], mark_center=mark_center)], axis=1)
     # append extra frames if necessary to make square array with ncols
     extra_frames, im_shape = len(peaks_ims)%ncols, peaks_ims.iloc[0][0].shape
+    add_frames=0
     if extra_frames > 0:
         add_frames = ncols-extra_frames
         peaks_ims = peaks_ims.append(pd.Series([[np.zeros(im_shape)]\
@@ -1391,3 +1400,10 @@ def filter_parts(spot_df, thresh=2):
     good_parts = pids[counts>2]
     good_parts = spot_df[spot_df.pid.isin(good_parts)]
     return good_parts
+
+def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label=''):
+    if ax==None: fig, ax = plt.subplots(1)
+    if formal:
+        ax.plot(*ecdf(arr, conventional=formal), alpha=alpha, label=label)
+    else:
+        ax.scatter(*ecdf(arr, conventional=formal), s=15, alpha=alpha, label=label)
