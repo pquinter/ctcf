@@ -16,6 +16,7 @@ import numpy as np
 import warnings
 import glob
 import os
+from tqdm import tqdm
 
 import skimage
 from skimage import io, morphology, segmentation
@@ -25,6 +26,7 @@ from skimage.external.tifffile import TiffFile
 from scipy import ndimage
 
 from numba import jit
+from bebi103_legacy import ecdf
 
 def split_project(im_col):
     """
@@ -1183,7 +1185,7 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
     ims_array = np.stack([i[0] for i in ims_df])
     return ims_array
 
-def get_bbox3d(center, size_xy=9, im=None, return_im=True, pad=2, mark_center=False, size_z=5):
+def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     """
     Get square bounding box around center
 
@@ -1191,8 +1193,9 @@ def get_bbox3d(center, size_xy=9, im=None, return_im=True, pad=2, mark_center=Fa
     ---------
     center: tuple
         x, y coordinates
-    size_xy, size_z: int
-        size of the bounding box in pixels
+    size: int
+        size of the bounding box in pixels in xy dimensions.
+        Get all z-stacks by default.
     im: 2D array
         image to extract window from
     return_im: bool
@@ -1207,9 +1210,8 @@ def get_bbox3d(center, size_xy=9, im=None, return_im=True, pad=2, mark_center=Fa
     x, y, z = center
     x, y, z = int(x), int(y), int(z)
     # get bbox coordinates
-    sxy = size_xy//2
-    sz = size_z//2
-    bbox = np.s_[z-sz:z+sz+1,y-sxy:y+sxy+1, x-sxy:x+sxy+1]
+    s = size//2
+    bbox = np.s_[z-s:z+s+1,y-s:y+s+1, x-s:x+s+1]
     if return_im:
         # get bbox image
         im_bbox = im[bbox].copy()
@@ -1337,7 +1339,7 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
                     ims_dict[x.imname], pad=False)], axis=1)
     all_ims  = np.stack([i[0] for i in peaks_ims])
-    return sel_bool, all_ims
+    return sel_bool, all_ims, peaks
 
 def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
     """
@@ -1407,3 +1409,22 @@ def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label=''):
         ax.plot(*ecdf(arr, conventional=formal), alpha=alpha, label=label)
     else:
         ax.scatter(*ecdf(arr, conventional=formal), s=15, alpha=alpha, label=label)
+
+def load_ims(rdir, ext, channel=None):
+    """ Load images to dictionary """
+    ims = {}
+    for _dir in tqdm(os.listdir(rdir)):
+        if 'DS_Store' in _dir: continue
+        ddir = rdir + _dir + '/'
+        for fname in os.listdir(ddir):
+            if ext=='tif' and ext in fname:
+                im = io.imread(ddir + fname)
+                if isinstance(channel, int):
+                    im = im[:,:,channel]
+            elif ext=='STK' and ext in fname:
+                collection = io.ImageCollection(ddir+fname, load_func=TiffFile)
+                im = np.stack([z.asarray() for z in collection])[0]
+            else: continue
+            _fname = fname.split('_')
+            ims[_fname[1]+'_'+_fname[2].split('.')[0]] = im
+    return ims
