@@ -105,6 +105,7 @@ def plot_gallery(images, n_row=3, n_col=4, reshape=None,
     for i in range(n_row * n_col):
         ax = fig.add_subplot(n_row, n_col, i + 1)
         if reshape:
+            h, w = reshape
             ax.imshow(images[i].reshape((h, w)), cmap=cmap)
         else:
             ax.imshow(images[i], cmap=cmap)
