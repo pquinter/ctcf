@@ -1216,6 +1216,8 @@ def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False
     if return_im:
         # get bbox image
         im_bbox = im[bbox].copy()
+        if pad:
+            im_bbox = np.pad(im_bbox, pad, 'constant', constant_values=np.min(im_bbox))
         return im_bbox
     else: return bbox
 
