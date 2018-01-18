@@ -1250,7 +1250,7 @@ def check_borders(coords, im, s):
     return (x>s)&(x+s<dimx)&(y>s)&(y+s<dimy)
 
 def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
-        mark_center=True, movie=False, normall=False):
+        mark_center=True, movie=False, normall=False, figsize=(25.6, 13.6)):
     """
     Manual click-selection of training set.
     Use a large screen if number of candidate objects is large!
@@ -1276,6 +1276,8 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     normall: bool
         Whether to normalize each image to [0,1] range.
         Might help visualization but hurt image comparison.
+    figsize: tuple
+        Pair of floats specifying figure size. Default is for big monitor.
 
     Returns
     ---------
@@ -1318,7 +1320,7 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
                                 np.full(add_frames, np.max(peaks.uid)+1)))])
     labels_concat = im_block(labels, cols=ncols, norm=0)
     # display for click selection
-    fig, ax = plt.subplots(1, figsize=(25.6, 13.6))
+    fig, ax = plt.subplots(1, figsize=figsize)
     ax.set_title('click to select; ctrl+click to undo last click; alt+click to finish')
     ax.imshow(peaks_imsconcat, cmap=cmap)# array of frames for visual sel
     ax.imshow(labels_concat, alpha=0.0)# overlay array of squares with invisible labels
