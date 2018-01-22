@@ -1097,7 +1097,8 @@ def im_block(ims, cols, norm=True):
     block = np.vstack(block)
     return block
 
-def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
+def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False,
+        size_z=None):
     """
     Get square bounding box around center
 
@@ -1143,7 +1144,7 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
     else: return bbox
 
 def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
-        pad=0, mark_center=0, im3d=False):
+        pad=0, mark_center=0, im3d=False, size_z=None):
     """
     Get square bounding boxes in batch around center coords from dataframe
 
@@ -1156,18 +1157,22 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
         dict of images. Keys must be the same as `imname`s in peaks_df
     size: int
         xy size of bounding box to get from image around object coordinates.
-        If 3d, size in z is 5 by default.
+        If 3d, size in z is also this, unless Full is specified
     movie: bool
         True if ims_dict contains movies
     pad: int
         Padding to add to each image.
     mark_center: bool
         whether to mark center of each image
+    im3d: bool
+        whether image is 3D or not
+    size_z: 'Full' or None
+        If 'Full', get all z planes. Otherwise get same number as xy size.
 
     Returns
     ---------
-    ims_array: stack
-        stack of images
+    ims_array: stack or list
+        stack of images if possible. If different sized arrays, returns list.
 
     """
 
@@ -1179,14 +1184,17 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
         coords = ['x','y']
     if movie:
         ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
-                ims_dict[x.imname][x.frame], mark_center=mark_center, pad=pad)], axis=1)
+                ims_dict[x.imname][x.frame], mark_center=mark_center, pad=pad, size_z=size_z)], axis=1)
     else:
         ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
-                ims_dict[x.imname], mark_center=mark_center, pad=pad)], axis=1)
-    ims_array = np.stack([i[0] for i in ims_df])
-    return ims_array
+                ims_dict[x.imname], mark_center=mark_center, pad=pad, size_z=size_z)], axis=1)
+    try:
+        return np.stack([i[0] for i in ims_df])
+    except ValueError:
+        warnings.warn('Encountered images of different Z depths. Returning list of arrays.')
+        return [i[0] for i in ims_df]
 
-def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False):
+def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False, size_z=None):
     """
     Get square bounding box around center
 
@@ -1201,6 +1209,8 @@ def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False
         image to extract window from
     return_im: bool
         whether to return the bbox image or just coordinates
+    size_z: 'Full' or None
+        If 'Full', get all z planes. Otherwise get same number as xy size.
 
     Returns
     ---------
@@ -1212,7 +1222,10 @@ def get_bbox3d(center, size=9, im=None, return_im=True, pad=2, mark_center=False
     x, y, z = int(x), int(y), int(z)
     # get bbox coordinates
     s = size//2
-    bbox = np.s_[z-s:z+s+1,y-s:y+s+1, x-s:x+s+1]
+    if size_z=='Full':
+        bbox = np.s_[:,y-s:y+s+1, x-s:x+s+1]
+    else:
+        bbox = np.s_[z-s:z+s+1,y-s:y+s+1, x-s:x+s+1]
     if return_im:
         # get bbox image
         im_bbox = im[bbox].copy()
