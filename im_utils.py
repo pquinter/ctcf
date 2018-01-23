@@ -1446,3 +1446,67 @@ def load_ims(rdir, ext, channel=None):
             _fname = fname.split('_')
             ims[_fname[1]+'_'+_fname[2].split('.')[0]] = im
     return ims
+
+def segment_cellfromnuc(im_cells, nuclei_markers):
+    """
+    Segment cells by reconstructing from nuclei markers using watershed
+
+    Arguments
+    ---------
+    im_cells: array
+        image of cells
+    nuclei_markers: array
+        integer labeled image of nuclei markers
+
+    Returns
+    ---------
+    cell_markers, nuclei_markers: array
+        only cells with nuclei and nuclei with cells
+        cell markers are dilated to keep particles close to edge.
+    mask_cells, mask_nuclei: boolean array
+        boolean masks
+    """
+
+    mask_cells = mask_image(im_cells, min_size=1000, block_size=151,
+        selem=skimage.morphology.disk(15))
+    # enlarge mask to keep particles close to edge. Doing this before watershed
+    # prevents invasion into other cells and is faster, smart
+    mask_cells = skimage.morphology.binary_dilation(mask_cells,
+                                        selem=skimage.morphology.disk(10))
+    cell_markers = skimage.measure.label(mask_cells)
+    # watershed transform using nuclei as basins, also removes cells wo nucleus
+    cell_markers = skimage.morphology.watershed(cell_markers,
+            nuclei_markers, mask=mask_cells)
+    # update masks; keeps only cells with nucleus and viceversa
+    mask_cells = cell_markers>0
+    mask_nuclei = nuclei_markers>0 * mask_cells
+
+    # ensure use of same labels for nuclei
+    nuclei_markers  = mask_nuclei * cell_markers
+
+    # correct any invasion into neighboring nuclei?? Unsure how to do this
+    # seems to happen rarely, keep an eye out for it
+
+    return cell_markers, nuclei_markers, mask_cells, mask_nuclei
+
+def make_seg_im(markers, im):
+    """
+    Make a segmentation image with marker-based highlighted boundaries
+
+    Arguments
+    ---------
+    markers: tuple of arrays
+        labeled cell/nuclei markers
+    im: array
+        image to draw boundaries on
+
+    Returns
+    ---------
+    seg_im: array
+        image with segmentation boundaries
+    """
+    seg_im = im.copy()
+    print('making segmentation image with highlighted boundaries...')
+    for marker in markers:
+        seg_im[skimage.segmentation.find_boundaries(marker)] = np.max(seg_im)
+    return seg_im
