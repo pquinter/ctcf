@@ -1447,7 +1447,7 @@ def load_ims(rdir, ext, channel=None):
             ims[_fname[1]+'_'+_fname[2].split('.')[0]] = im
     return ims
 
-def segment_cellfromnuc(im_cells, nuclei_markers):
+def segment_from_seeds(im, seed_markers, mask_params, dilate=False):
     """
     Segment cells by reconstructing from nuclei markers using watershed
 
@@ -1466,28 +1466,23 @@ def segment_cellfromnuc(im_cells, nuclei_markers):
     mask_cells, mask_nuclei: boolean array
         boolean masks
     """
-
-    mask_cells = mask_image(im_cells, min_size=1000, block_size=151,
-        selem=skimage.morphology.disk(15))
+    min_size, block_size, disk_size = mask_params
+    mask = mask_image(im, min_size=min_size, block_size=block_size,
+        selem=skimage.morphology.disk(disk_size))
+    if dilate:
     # enlarge mask to keep particles close to edge. Doing this before watershed
     # prevents invasion into other cells and is faster, smart
-    mask_cells = skimage.morphology.binary_dilation(mask_cells,
-                                        selem=skimage.morphology.disk(10))
-    cell_markers = skimage.measure.label(mask_cells)
+        mask = skimage.morphology.binary_dilation(mask,
+                                            selem=skimage.morphology.disk(10))
+    markers = skimage.measure.label(mask)
     # watershed transform using nuclei as basins, also removes cells wo nucleus
-    cell_markers = skimage.morphology.watershed(cell_markers,
-            nuclei_markers, mask=mask_cells)
-    # update masks; keeps only cells with nucleus and viceversa
-    mask_cells = cell_markers>0
-    mask_nuclei = nuclei_markers>0 * mask_cells
+    markers = skimage.morphology.watershed(markers,
+            seed_markers, mask=mask)
 
     # ensure use of same labels for nuclei
-    nuclei_markers  = mask_nuclei * cell_markers
+    seed_markers  = seed_markers>0 * markers
 
-    # correct any invasion into neighboring nuclei?? Unsure how to do this
-    # seems to happen rarely, keep an eye out for it
-
-    return cell_markers, nuclei_markers, mask_cells, mask_nuclei
+    return markers, seed_markers
 
 def make_seg_im(markers, im):
     """
