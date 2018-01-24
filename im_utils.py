@@ -1453,18 +1453,20 @@ def segment_from_seeds(im, seed_markers, mask_params, dilate=False):
 
     Arguments
     ---------
-    im_cells: array
-        image of cells
-    nuclei_markers: array
-        integer labeled image of nuclei markers
+    im: array
+        image to segment
+    seed_markers: array
+        integer labeled image of seeds to expand from for watershed
+    mask_params: tuple of 3
+        min_size, block_size, disk_size for mask_image func
+    dilate: bool
+        whether to perform morphological dilation.
+        Useful to keep stuff close to edge
 
     Returns
     ---------
-    cell_markers, nuclei_markers: array
-        only cells with nuclei and nuclei with cells
-        cell markers are dilated to keep particles close to edge.
-    mask_cells, mask_nuclei: boolean array
-        boolean masks
+    markers, seed_markers: array
+        only objects with seeds and seeds with objects
     """
     min_size, block_size, disk_size = mask_params
     mask = mask_image(im, min_size=min_size, block_size=block_size,
@@ -1480,7 +1482,8 @@ def segment_from_seeds(im, seed_markers, mask_params, dilate=False):
             seed_markers, mask=mask)
 
     # ensure use of same labels for nuclei
-    seed_markers  = seed_markers>0 * markers
+    seed_mask = seed_markers>0
+    seed_markers  =  seed_mask * markers
 
     return markers, seed_markers
 
