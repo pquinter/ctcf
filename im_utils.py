@@ -1263,7 +1263,8 @@ def check_borders(coords, im, s):
     return (x>s)&(x+s<dimx)&(y>s)&(y+s<dimy)
 
 def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
-        mark_center=True, movie=False, normall=False, figsize=(25.6, 13.6)):
+        mark_center=True, movie=False, normall=False, figsize=(25.6, 13.6),
+        step=None):
     """
     Manual click-selection of training set.
     Use a large screen if number of candidate objects is large!
@@ -1291,6 +1292,8 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         Might help visualization but hurt image comparison.
     figsize: tuple
         Pair of floats specifying figure size. Default is for big monitor.
+    step: None or int
+        if integer, make selection in steps of this size
 
     Returns
     ---------
@@ -1298,8 +1301,21 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         Can be used to index original `peaks` dataframe. True for selected ims.
     all_ims: array
         Screened objects. To get selected images, index: all_ims[sel_bool]
+    peaks: dataframe
+        copy of original dataframe without image patches too close to border
 
     """
+
+    if step:
+        sel_bool, all_ims, peaks = [], [], pd.DataFrame()
+        for n in np.arange(step, len(peaks_df)+step, step):
+            _sel_bool, _all_ims, _peaks = sel_training(peaks_df.iloc[n-step:n],
+                    ims_dict, ncols=ncols, mark_center=mark_center, s=s,
+                    cmap=cmap, normall=normall, figsize=figsize, step=None)
+            sel_bool.append(_sel_bool)
+            all_ims.append(_all_ims)
+            peaks = pd.concat((peaks, _peaks), ignore_index=True)
+        return np.concatenate(sel_bool), np.concatenate(all_ims), peaks
 
     peaks = peaks_df.copy()
     # clear peaks too close to image border
