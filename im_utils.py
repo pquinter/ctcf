@@ -1264,7 +1264,7 @@ def check_borders(coords, im, s):
 
 def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         mark_center=True, movie=False, normall=False, figsize=(25.6, 13.6),
-        step=None):
+        step=None, title=''):
     """
     Manual click-selection of training set.
     Use a large screen if number of candidate objects is large!
@@ -1294,6 +1294,8 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         Pair of floats specifying figure size. Default is for big monitor.
     step: None or int
         if integer, make selection in steps of this size
+    title: str
+        instruction to print on top of selection plot
 
     Returns
     ---------
@@ -1310,8 +1312,8 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         sel_bool, all_ims, peaks = [], [], pd.DataFrame()
         for n in np.arange(step, len(peaks_df)+step, step):
             _sel_bool, _all_ims, _peaks = sel_training(peaks_df.iloc[n-step:n],
-                    ims_dict, ncols=ncols, mark_center=mark_center, s=s,
-                    cmap=cmap, normall=normall, figsize=figsize, step=None)
+                ims_dict, ncols=ncols, mark_center=mark_center, s=s, cmap=cmap,
+                normall=normall, figsize=figsize, step=None, title=title)
             sel_bool.append(_sel_bool)
             all_ims.append(_all_ims)
             peaks = pd.concat((peaks, _peaks), ignore_index=True)
@@ -1350,7 +1352,7 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     labels_concat = im_block(labels, cols=ncols, norm=0)
     # display for click selection
     fig, ax = plt.subplots(1, figsize=figsize)
-    ax.set_title('click to select; ctrl+click to undo last click; alt+click to finish')
+    ax.set_title(title+'\nclick to select; ctrl+click to undo last click; alt+click to finish')
     ax.imshow(peaks_imsconcat, cmap=cmap)# array of frames for visual sel
     ax.imshow(labels_concat, alpha=0.0)# overlay array of squares with invisible labels
     # yticks for guidance, take into account padding
@@ -1411,7 +1413,7 @@ def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
     # classify
     labels_pred = clf.predict(spot_ims_r)
     # add labels
-    spot_clf['plabel'] = labels_pred
+    spot_clf['svm_label'] = labels_pred
     return spot_clf, spot_ims
 
 def filter_parts(spot_df, thresh=2):
