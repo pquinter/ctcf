@@ -1404,10 +1404,10 @@ def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
     spot_clf = spot_df.copy()
     # clear spot_clf too close to borders
     spot_clf = spot_clf[spot_clf.apply(lambda x: check_borders(x[['x','y']],
-                                            im_dict[x.imname], s), axis=1)]
+                        im_dict[x.imname], s), axis=1)].reset_index(drop=True)
     spot_ims = get_batch_bbox(spot_clf, im_dict, size=s, movie=movie)
     if norm:
-        spot_ims = normalize(spot_ims)
+        spot_ims = normalize_im(spot_ims)
     # ravel for classif
     spot_ims_r = np.stack([np.ravel(i) for i in spot_ims])
     # classify
