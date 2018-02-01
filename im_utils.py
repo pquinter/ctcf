@@ -1188,7 +1188,7 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
         coords = coords_col
     if movie:
         ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
-                ims_dict[x.imname][x.frame], mark_center=mark_center, pad=pad, size_z=size_z)], axis=1)
+                ims_dict[x.imname][int(x.frame)], mark_center=mark_center, pad=pad, size_z=size_z)], axis=1)
     else:
         ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
                 ims_dict[x.imname], mark_center=mark_center, pad=pad, size_z=size_z)], axis=1)
