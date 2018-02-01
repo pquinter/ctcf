@@ -995,10 +995,15 @@ def tracking_movie(movie, tracks, x='x', y='y'):
         frame_counter = tracks.frame.unique()
     else: frame_counter = np.arange(len(movie))
     for f, im in enumerate(movie):
-        coords = tracks[tracks.frame==frame_counter[f]][[x, y]]
-        circles = [circle_perimeter(int(c[y]), int(c[x]), 10,
-                        shape=im.shape) for (_, c) in coords.iterrows()]
+        coords = tracks[tracks.frame==frame_counter[f]][[x, y]].dropna()
         im_plot = im.copy()
+        try:
+            circles = [circle_perimeter(int(c[y]), int(c[x]), 10,
+                        shape=im.shape) for (_, c) in coords.iterrows()]
+        # if nan, no coordinates specified for frame, just put image
+        except ValueError:
+            movie_tracks[f] = im_plot
+            continue
         for circle in circles:
             im_plot[circle] = np.max(im_plot)
         movie_tracks[f] = im_plot
