@@ -905,23 +905,28 @@ def resize_frame(frame, h, w, fillvalue='min'):
     new_frame[:frame.shape[0], :frame.shape[1]] = frame
     return new_frame
 
-def concat_movies(movies, nrows=1):
+def concat_movies(movies, ncols=4, norm=True):
     """
-    Concatenate a set movies frame by frame to play multiple simultaneously
+    Concatenate a set movies frame by frame to play multiple simultaneously.
+    Will add pixels to frames and frames to movies as necessary to make
+    max-movie-length square arrays.
 
     Arguments
     ---------
     movies: iterable of numpy stacks
         movies to show
-    rows: int
-        number of rows to display movies into, 
-        will add rows if necessary, i.e. nmovies%nrows!=0
+    ncols: int
+        number of columns to display movies into,
+    norm: bool
+        whether to normalize/scale each image
 
     Returns
     ---------
     conc_mov: numpy stack
         concatenated movies, can be played using show_movie
     """
+    # make copy to modify
+    movies = movies.copy()
     # max number of frames per movie
     n_frames = max([len(l) for l in movies])
     # add black frames if necessary
@@ -933,27 +938,18 @@ def concat_movies(movies, nrows=1):
             _movies.append(m)
     try: movies = _movies
     except NameError: pass
-    # number of movies per column
-    mpc = int(len(movies)/nrows)
+    # append extra movies if necessary to make square array with ncols
+    extra_movs = ncols - len(movies)%ncols
+    movies.extend([np.zeros_like(movies[0]) for f in range(extra_movs)])
+    # get info to resize frames if necessary
     # maximum frame height and width
     max_h = max([m[0].shape[0] for m in movies])
     max_w = max([m[0].shape[1] for m in movies])
     # minimum pixel value to fill empty spaces
-    min_val = (min([np.min(m) for m in movies])) 
-    # new concatenated movie
-    conc_mov = []
-    # divide into sets of movies per row
-    movs_byrow = [movies[i:i+mpc] for i in range(0, len(movies), mpc)]
-    for f in range(n_frames):
-        currframes = []
-        for movrow in movs_byrow:
-            while len(movrow) < mpc:
-                # fill in empty columns with black frames if needed
-                movrow.append(np.full_like(movrow[0], np.min(movrow[0])))
-            # concatenate each (same sized) frame of movies in row
-            currframes.append(np.concatenate([resize_frame(mov[f], 
-                            max_h, max_w, min_val) for mov in movrow], axis=1))
-        conc_mov.append(np.vstack(currframes))
+    min_val = (min([np.min(m) for m in movies]))
+    # concatenate movies
+    conc_mov = np.stack([im_block([resize_frame(mov[f], max_h, max_w, min_val)\
+                for mov in movies], ncols, norm=norm) for f in range(n_frames)])
     return np.stack(conc_mov)
 
 def regionprops2df(regionprops, props = ('label','area','bbox',
@@ -1092,6 +1088,7 @@ def im_block(ims, cols, norm=True):
     block: array
 
     """
+    ims = np.stack(ims)
     if norm:
         ims = normalize(ims)
     nrows = int(ims.shape[0]/cols)
