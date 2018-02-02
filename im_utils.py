@@ -1270,7 +1270,7 @@ def check_borders(coords, im, s):
 
 def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         mark_center=True, movie=False, normall=False, figsize=(25.6, 13.6),
-        step=None, title=''):
+        step=None, title='', coords_col=['x','y']):
     """
     Manual click-selection of training set.
     Use a large screen if number of candidate objects is large!
@@ -1279,7 +1279,7 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     ---------
     peaks_df: DataFrame
         df with object coordinates and corresponding image name.
-        Must contain columns ['x','y','imname'] and 'frame' for movie
+        Must contain columns in `coords_col`, 'imname' and 'frame' for movie
     ims_dict: dictionary
         dict of images. Keys must be the same as `imname`s in peaks_df
     s: int
@@ -1302,6 +1302,10 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         if integer, make selection in steps of this size
     title: str
         instruction to print on top of selection plot
+    coords_col: list or str
+        name of column(s) containing coordinates
+
+
 
     Returns
     ---------
@@ -1327,17 +1331,17 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
 
     peaks = peaks_df.copy()
     # clear peaks too close to image border
-    not_inborder = peaks.apply(lambda x: check_borders(x[['x','y']],
+    not_inborder = peaks.apply(lambda x: check_borders(x[coords_col],
                                             ims_dict[x.imname], s), axis=1)
     peaks = peaks.loc[not_inborder]
     # add unique identifier
     peaks['uid'] = np.arange(len(peaks))
     # get s by s squares containing spots
     if movie: # also need to get frame
-         peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+         peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
                 ims_dict[x.imname][x.frame], mark_center=mark_center)], axis=1)
     else:
-        peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+        peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
                 ims_dict[x.imname], mark_center=mark_center)], axis=1)
     # append extra frames if necessary to make square array with ncols
     extra_frames, im_shape = len(peaks_ims)%ncols, peaks_ims.iloc[0][0].shape
@@ -1375,10 +1379,10 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     sel_bool = peaks.uid.isin(selected).values
     # get selected images, without padding nor normalizing. Need to fetch originals again
     if movie: # also need to get frame
-         peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+         peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
                 ims_dict[x.imname][x.frame], pad=False)], axis=1)
     else:
-        peaks_ims = peaks.apply(lambda x: [get_bbox(x[['x','y']], s,
+        peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
                     ims_dict[x.imname], pad=False)], axis=1)
     all_ims  = np.stack([i[0] for i in peaks_ims])
     return sel_bool, all_ims, peaks
