@@ -1330,36 +1330,25 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         return np.concatenate(sel_bool), np.concatenate(all_ims), peaks
 
     peaks = peaks_df.copy()
-    # clear peaks too close to image border
-    not_inborder = peaks.apply(lambda x: check_borders(x[coords_col],
-                                            ims_dict[x.imname], s), axis=1)
-    peaks = peaks.loc[not_inborder]
+    # get images
+    peaks_ims = list(get_batch_bbox(peaks, ims_dict, size=s, movie=movie))
+    # append extra images if necessary to make square array with ncols
+    extra_ims = ncols - len(peaks_ims)%ncols
+    # maximum frame height and width
+    max_h = max([im.shape[0] for im in peaks_ims])
+    max_w = max([im.shape[1] for im in peaks_ims])
+    peaks_ims.extend([np.zeros((max_h, max_w)) for f in range(extra_ims)])
+    # resize frames if necessary and covert to stack
+    peaks_ims = np.stack([resize_frame(im, max_h, max_w) for im in peaks_ims])
+    # concatenate and scale if requested
+    peaks_imsconcat = np.clip(im_block(peaks_ims, cols=ncols, norm=normall),
+                            np.min(peaks_ims), scale*np.max(peaks_ims))
     # add unique identifier
     peaks['uid'] = np.arange(len(peaks))
-    # get s by s squares containing spots
-    if movie: # also need to get frame
-         peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
-                ims_dict[x.imname][x.frame], mark_center=mark_center)], axis=1)
-    else:
-        peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
-                ims_dict[x.imname], mark_center=mark_center)], axis=1)
-    # append extra frames if necessary to make square array with ncols
-    extra_frames, im_shape = len(peaks_ims)%ncols, peaks_ims.iloc[0][0].shape
-    add_frames=0
-    if extra_frames > 0:
-        add_frames = ncols-extra_frames
-        peaks_ims = peaks_ims.append(pd.Series([[np.zeros(im_shape)]\
-                                for f in range(add_frames)]))
-    # concatenate squares for selection (normalize each image if requested)
-    peaks_ims = np.stack([i[0] for i in peaks_ims])
-    peaks_imsconcat = im_block(peaks_ims, cols=ncols, norm=normall)
-    # scale dynamic range to improve visibility, if scale<1
-    peaks_imsconcat = np.clip(peaks_imsconcat, np.min(peaks_imsconcat),
-            scale*np.max(peaks_imsconcat))
-    # create s by s squares with labels to track selection and concatenate
-    labels = np.stack([np.full(im_shape, l) for l in np.concatenate((peaks.uid.values,
-                                np.full(add_frames, np.max(peaks.uid)+1)))])
+    # create squares with labels to track selection and concatenate
+    labels = np.stack([np.full((max_h, max_w), l) for l in np.arange(len(peaks_ims))])
     labels_concat = im_block(labels, cols=ncols, norm=0)
+
     # display for click selection
     fig, ax = plt.subplots(1, figsize=figsize)
     ax.set_title(title+'\nclick to select; ctrl+click to undo last click; alt+click to finish')
@@ -1377,15 +1366,7 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     else: selected = []
     # get boolean array of selected for indexing original df
     sel_bool = peaks.uid.isin(selected).values
-    # get selected images, without padding nor normalizing. Need to fetch originals again
-    if movie: # also need to get frame
-         peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
-                ims_dict[x.imname][x.frame], pad=False)], axis=1)
-    else:
-        peaks_ims = peaks.apply(lambda x: [get_bbox(x[coords_col], s,
-                    ims_dict[x.imname], pad=False)], axis=1)
-    all_ims  = np.stack([i[0] for i in peaks_ims])
-    return sel_bool, all_ims, peaks
+    return sel_bool, peaks_ims, peaks
 
 def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
     """
