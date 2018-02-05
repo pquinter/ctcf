@@ -1156,7 +1156,7 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
         df with object coordinates and corresponding image name.
         Must contain columns ['x','y','imname'] and 'frame' for movie
     ims_dict: dictionary
-        dict of images. Keys must be the same as `imname`s in peaks_df
+        dict of images. Keys must be the same as `imname`s in df
     size: int
         xy size of bounding box to get from image around object coordinates.
         If 3d, size in z is also this, unless Full is specified
@@ -1268,7 +1268,7 @@ def check_borders(coords, im, s):
     x, y = coords
     return (x>s)&(x+s<dimx)&(y>s)&(y+s<dimy)
 
-def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
+def sel_training(df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
         mark_center=True, movie=False, normall=False, figsize=(25.6, 13.6),
         step=None, title='', coords_col=['x','y']):
     """
@@ -1277,11 +1277,11 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
 
     Arguments
     ---------
-    peaks_df: DataFrame
+    df: DataFrame
         df with object coordinates and corresponding image name.
         Must contain columns in `coords_col`, 'imname' and 'frame' for movie
     ims_dict: dictionary
-        dict of images. Keys must be the same as `imname`s in peaks_df
+        dict of images. Keys must be the same as `imname`s in df
     s: int
         size of bounding box to get from image around object coordinates
     cmap: str
@@ -1305,68 +1305,63 @@ def sel_training(peaks_df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     coords_col: list or str
         name of column(s) containing coordinates
 
-
-
     Returns
     ---------
     sel_bool: boolean array
-        Can be used to index original `peaks` dataframe. True for selected ims.
+        True for selected ims.
     all_ims: array
-        Screened objects. To get selected images, index: all_ims[sel_bool]
-    peaks: dataframe
-        copy of original dataframe without image patches too close to border
+        Screened images. To get selected images, index: all_ims[sel_bool]
+    df: dataframe
+        original dataframe
 
     """
 
     if step:
-        sel_bool, all_ims, peaks = [], [], pd.DataFrame()
-        for n in np.arange(step, len(peaks_df)+step, step):
-            _sel_bool, _all_ims, _peaks = sel_training(peaks_df.iloc[n-step:n],
+        sel_bool, all_ims, df_ = [], [], pd.DataFrame()
+        for n in np.arange(step, len(df)+step, step):
+            _sel_bool, _all_ims, _df = sel_training(df.iloc[n-step:n],
                 ims_dict, ncols=ncols, mark_center=mark_center, s=s, cmap=cmap,
                 normall=normall, figsize=figsize, step=None, title=title)
             sel_bool.append(_sel_bool)
             all_ims.append(_all_ims)
-            peaks = pd.concat((peaks, _peaks), ignore_index=True)
-        return np.concatenate(sel_bool), np.concatenate(all_ims), peaks
+            df_ = pd.concat((df_, _df), ignore_index=True)
+        return np.concatenate(sel_bool), np.concatenate(all_ims), df_
 
-    peaks = peaks_df.copy()
-    # get images
-    peaks_ims = list(get_batch_bbox(peaks, ims_dict, size=s, movie=movie))
-    # append extra images if necessary to make square array with ncols
-    extra_ims = ncols - len(peaks_ims)%ncols
+    # get images; convert to list for convenience
+    df_ims = list(get_batch_bbox(df, ims_dict, size=s, movie=movie))
     # maximum frame height and width
-    max_h = max([im.shape[0] for im in peaks_ims])
-    max_w = max([im.shape[1] for im in peaks_ims])
-    peaks_ims.extend([np.zeros((max_h, max_w)) for f in range(extra_ims)])
+    max_h = max([im.shape[0] for im in df_ims])
+    max_w = max([im.shape[1] for im in df_ims])
+    # add extra null images if necessary to make square array with ncols
+    extra_ims = ncols - len(df_ims)%ncols
+    df_ims.extend([np.zeros((max_h, max_w)) for f in range(extra_ims)])
     # resize frames if necessary and covert to stack
-    peaks_ims = np.stack([resize_frame(im, max_h, max_w) for im in peaks_ims])
-    # concatenate and scale if requested
-    peaks_imsconcat = np.clip(im_block(peaks_ims, cols=ncols, norm=normall),
-                            np.min(peaks_ims), scale*np.max(peaks_ims))
-    # add unique identifier
-    peaks['uid'] = np.arange(len(peaks))
+    df_ims = np.stack([resize_frame(im, max_h, max_w) for im in df_ims])
+    # concatenate into image block and scale intensity to max*scale
+    df_imsconcat = np.clip(im_block(df_ims, cols=ncols, norm=normall),
+                            np.min(df_ims), scale*np.max(df_ims))
     # create squares with labels to track selection and concatenate
-    labels = np.stack([np.full((max_h, max_w), l) for l in np.arange(len(peaks_ims))])
+    labels = np.stack([np.full((max_h, max_w), l) for l in np.arange(len(df_ims))])
     labels_concat = im_block(labels, cols=ncols, norm=0)
 
     # display for click selection
     fig, ax = plt.subplots(1, figsize=figsize)
     ax.set_title(title+'\nclick to select; ctrl+click to undo last click; alt+click to finish')
-    ax.imshow(peaks_imsconcat, cmap=cmap)# array of frames for visual sel
+    ax.imshow(df_imsconcat, cmap=cmap)# array of frames for visual sel
     ax.imshow(labels_concat, alpha=0.0)# overlay array of squares with invisible labels
     # yticks for guidance, take into account padding
-    ax.set_yticks(np.arange(s+4, len(peaks_ims)/ncols*1.1*(s+4), 10))
+    ax.set_yticks(np.arange(s+4, len(df_ims)/ncols*1.1*(s+4), 10))
     plt.tight_layout()
     # get labels by click
     coords = plt.ginput(10000, timeout=0, show_clicks=True)
     plt.close('all')
     if len(coords)>0:
-        # filter selected labels
+        # filter selected labels and remove duplicates
         selected = {labels_concat[int(c1), int(c2)] for (c2, c1) in coords}
     else: selected = []
-    # get boolean array of selected for indexing original df
-    sel_bool = peaks.uid.isin(selected).values
-    return sel_bool, peaks_ims, peaks
+    # get boolean array of selected (needs to be list for np.isin() to work)
+    sel_bool = np.isin(np.arange(len(df)), list(selected))
+    return sel_bool, df_ims, df
 
 def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
     """
