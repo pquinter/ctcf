@@ -1512,3 +1512,26 @@ def make_seg_im(markers, im):
     for marker in markers:
         seg_im[skimage.segmentation.find_boundaries(marker)] = np.max(seg_im)
     return seg_im
+
+def draw_outline(mov, mask):
+    """
+    Draw mask-based outline on each frame of movie
+
+    Arguments
+    ---------
+    mov: movie
+    mask: boolean array
+
+    Returns
+    ---------
+    outlined_mov: copy of movie with burned in outline
+
+    """
+    # get outline
+    outline = skimage.segmentation.find_boundaries(mask)
+    outlined_mov = mov.copy()
+    # draw them on movie
+    for f in outlined_mov:
+        f[outline] = np.max(f)
+    return outlined_mov
+
