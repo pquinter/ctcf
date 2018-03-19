@@ -167,7 +167,7 @@ def im_hist(im):
 
     return None
 
-def rectangleROI(im, thresh=None):
+def rectangleROI(im, pad=0, thresh=None):
     """
     Identify coordinates of rectangular ROI in an image with mostly dark irrelevant pixels
     The returned ROI excludes all continuous zero columns and rows after thresholding
@@ -195,7 +195,7 @@ def rectangleROI(im, thresh=None):
     cols = np.nonzero(np.sum(im_thresh, 0))[0]
     # remove only continuous zero rows and columns and store coordinates in
     # slice object
-    roi_coords = (slice(min(rows),max(rows)+1), slice(min(cols),max(cols)+1))
+    roi_coords = (slice(min(rows)-pad,max(rows)+1+pad), slice(min(cols)-pad,max(cols)+1+pad))
 
     return roi_coords
 
@@ -1535,3 +1535,30 @@ def draw_outline(mov, mask):
         f[outline] = np.max(f)
     return outlined_mov
 
+def corr_widealspot(ims, wsize=13, PSFwidth=4.2):
+    """
+    Compute correlation of set of image patches to an ideal spot:
+    single point source blurred with gaussian of PSF width
+    Useful to filter spurious peaks in low signal to noise ratio images
+
+    Arguments
+    ---------
+    wsize: int
+        size of the window around spot
+    PSFwidth: float
+        width of the point spread function
+
+    Returns
+    ---------
+    corrs: array
+        correlations with ideal spot
+    """
+    # Create ideal spot
+    idealspot = np.full((wsize,wsize), 0) # zero filled wsize*wsize array
+    idealspot[wsize//2,wsize//2] = 1 # single light point source at the center
+    idealspot = skimage.filters.gaussian(idealspot, sigma=PSFwidth) # PSF width blur
+    # pearson corr on projected im is best, assuming im is centered at potential
+    # peak. This is usually eq to max of normalized cross-correlation.
+    # Also tried spearman and 3d stacks, slower and not worth it.
+    corrs = np.array([np.corrcoef(idealspot.ravel(), im.ravel())[1][0] for im in ims])
+    return corrs
