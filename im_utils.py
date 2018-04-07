@@ -1187,8 +1187,10 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
     bbox_df: DataFrame
         df with object coordinates and corresponding image name.
         Must contain columns ['x','y','imname'] and 'frame' for movie
-    ims_dict: dictionary
+        If only single movie is specified, 'imname' col is not used.
+    ims_dict: dictionary of images or movie
         dict of images. Keys must be the same as `imname`s in df
+        can also be single movie array
     size: int
         xy size of bounding box to get from image around object coordinates.
         If 3d, size in z is also this, unless Full is specified
@@ -1221,8 +1223,17 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
     if coords_col:
         coords = coords_col
     if movie:
-        ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
-                ims_dict[x.imname][int(x.frame)], mark_center=mark_center, pad=pad, size_z=size_z)], axis=1)
+        if type(ims_dict) is np.ndarray:
+            warnings.warn("""
+                            No image dictinary provided.
+                            Assuming all images come from single movie.""")
+            ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
+                    ims_dict[int(x.frame)], mark_center=mark_center, pad=pad,
+                    size_z=size_z)], axis=1)
+        else:
+            ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
+                    ims_dict[x.imname][int(x.frame)], mark_center=mark_center,
+                    pad=pad, size_z=size_z)], axis=1)
     else:
         ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
                 ims_dict[x.imname], mark_center=mark_center, pad=pad, size_z=size_z)], axis=1)
