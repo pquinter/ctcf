@@ -1059,6 +1059,35 @@ def normalize_cosmicsafe(movie):
     return scaled
 
 @jit(nopython=True)
+def normalize_im_cs(im):
+    """
+    min-max scaler for an image, to fix each frame in the range [0, 1]
+    take care of cosmic rays if needed
+
+    Arguments
+    ---------
+    im: array
+        image to normalized
+
+    Returns
+    ---------
+    scaled: array
+        normalized copy of the image
+    """
+    frame = im.copy()
+    sort_int = np.sort(frame.ravel())
+    # if max px if 3 times higher than tenth largest, probably cosmic ray
+    if sort_int[-10]*3 < sort_int[-1]:
+        # identify where hot pixels are
+        max_allowed = sort_int[-10]
+        cosmic_ix = np.where(frame>max_allowed)
+        median_int = np.median(frame)
+        # change those values to background (median) values
+        for (x,y) in zip(*cosmic_ix):
+            frame[x,y] = median_int
+    return (frame - np.min(frame)) / (np.max(frame) - np.min(frame))
+
+@jit(nopython=True)
 def normalize_im(im):
     """
     min-max scaler for an image, to fix int values in the range [0, 1]
