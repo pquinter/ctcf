@@ -195,7 +195,9 @@ def rectangleROI(im, pad=0, thresh=None):
     cols = np.nonzero(np.sum(im_thresh, 0))[0]
     # remove only continuous zero rows and columns and store coordinates in
     # slice object
-    roi_coords = (slice(min(rows)-pad,max(rows)+1+pad), slice(min(cols)-pad,max(cols)+1+pad))
+    # avoid negative values and slices bigger than original image
+    roi_coords = (slice(max(0, min(rows)-pad), min(im.shape[0], max(rows)+1+pad)),
+                  slice(max(0, min(cols)-pad), min(im.shape[1], max(cols)+1+pad)))
 
     return roi_coords
 
