@@ -1636,3 +1636,30 @@ def corr_widealspot(ims, wsize=13, PSFwidth=4.2):
     # Also tried spearman and 3d stacks, slower and not worth it.
     corrs = np.array([np.corrcoef(idealspot.ravel(), im.ravel())[1][0] for im in ims])
     return corrs
+
+def concat_frames(frames):
+    """
+    Concatenate frames of different sizes into movie
+    Analog to np.concatenate(frames),
+    except add black pixels to frames if necessary to resize
+
+    Arguments
+    ---------
+    frames: array
+        2D arrays to be concatenated
+
+    Returns
+    ---------
+    stack
+        movie of concatenated resized frames
+
+    """
+    # get info to resize frames
+    # maximum frame height and width
+    max_h = max([m.shape[0] for m in frames])
+    max_w = max([m.shape[1] for m in frames])
+    # minimum pixel value to fill empty spaces
+    min_val = (min([np.min(m) for m in frames]))
+    # concatenate frames
+    return np.stack([resize_frame(f, max_h, max_w, min_val) for f in frames])
+
