@@ -1151,6 +1151,11 @@ def im_block(ims, cols, norm=True):
     block: array
 
     """
+    if not all(ims[0].shape==im.shape for im in ims):
+        warnings.warn('There are frames of different shapes. Resized with black pixels.')
+        max_h = max([im.shape[0] for im in ims])
+        max_w = max([im.shape[1] for im in ims])
+        ims = [resize_frame(im, max_h, max_w) for im in ims]
     ims = np.stack(ims)
     if norm:
         ims = normalize(ims)
