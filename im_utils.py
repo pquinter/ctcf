@@ -1610,8 +1610,10 @@ def draw_outline(mov, mask):
     outline = skimage.segmentation.find_boundaries(mask)
     outlined_mov = mov.copy()
     # draw them on movie
-    for f in outlined_mov:
-        f[outline] = np.max(f)
+    if outlined_mov.ndim==3:
+        for f in outlined_mov:
+            f[outline] = np.max(f)
+    else: outlined_mov[outline] = np.max(outlined_mov)
     return outlined_mov
 
 def corr_widealspot(ims, wsize=13, PSFwidth=4.2):
