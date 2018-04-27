@@ -1670,3 +1670,25 @@ def concat_frames(frames):
     # concatenate frames
     return np.stack([resize_frame(f, max_h, max_w, min_val) for f in frames])
 
+def cropmaskwroi(mask, roi_slice):
+    """
+    Crop mask with an Region of Interest defined by a slice object.
+    ROI can be obtained with zoom2roi func, used as mask[roi_slice]
+
+    Arguments
+    ---------
+    mask: boolean array
+    roi_slice: slice object
+        indicates region of interest as obtained from zoom2roi
+
+    Returns
+    ---------
+    cropped mask: boolean array
+        copy of mask with all values outside ROI set to False
+    """
+    # make copy and convert to integer to distinguish objects in roi
+    mask = mask.copy().astype(int)
+    # add 1 to make objects in roi==2
+    mask[roi_slice] = mask[roi_slice] + 1
+    # just return objects that are==2
+    return mask >= 2
