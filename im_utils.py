@@ -1692,3 +1692,27 @@ def cropmaskwroi(mask, roi_slice):
     mask[roi_slice] = mask[roi_slice] + 1
     # just return objects that are==2
     return mask >= 2
+
+def add_cbar(ax, arr, ylabel='', cmap=plt.cm.viridis):
+    """
+    Add colorbar to axes
+
+    Arguments
+    ---------
+    ax: axes
+    arr: numpy array with values for colormap
+    cmap: matplotlib colormap
+
+    Returns
+    ---------
+    cax: colorbar axes
+
+    """
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.45)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(arr))
+    sm._A = []
+    plt.colorbar(sm, cax=cax)
+    cax.set_ylabel(ylabel)
+    cax.yaxis.set_label_position('left')
+    return cax
