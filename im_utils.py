@@ -1028,7 +1028,8 @@ def normalize(movie):
         scaled[i] = (frame - np.min(frame)) / (np.max(frame) - np.min(frame))
     return scaled
 
-@jit(nopython=True)
+# remove_cs func does not support numba
+#@jit(nopython=True)
 def normalize_cosmicsafe(movie):
     """
     min-max scaler for a movie, to fix each frame in the range [0, 1]
@@ -1046,21 +1047,12 @@ def normalize_cosmicsafe(movie):
     """
     scaled = np.empty(movie.shape) # for numba it is necessary to use np.empty because float is default dtype
     for i in range(len(movie)):
-        frame = movie[i].copy()
-        sort_int = np.sort(frame.ravel())
-        # if max px if 3 times higher than tenth largest, probably cosmic ray
-        if sort_int[-10]*3 < sort_int[-1]:
-            # identify where hot pixels are
-            max_allowed = sort_int[-10]
-            cosmic_ix = np.where(frame>max_allowed)
-            median_int = np.median(frame)
-            # change those values to background (median) values
-            for (x,y) in zip(*cosmic_ix):
-                frame[x,y] = median_int
+        frame = remove_cs(movie[i])
         scaled[i] = (frame - np.min(frame)) / (np.max(frame) - np.min(frame))
     return scaled
 
-@jit(nopython=True)
+# remove_cs func does not support numba
+#@jit(nopython=True)
 def normalize_im_cs(im):
     """
     min-max scaler for an image, to fix each frame in the range [0, 1]
@@ -1076,17 +1068,7 @@ def normalize_im_cs(im):
     scaled: array
         normalized copy of the image
     """
-    frame = im.copy()
-    sort_int = np.sort(frame.ravel())
-    # if max px if 3 times higher than tenth largest, probably cosmic ray
-    if sort_int[-10]*3 < sort_int[-1]:
-        # identify where hot pixels are
-        max_allowed = sort_int[-10]
-        cosmic_ix = np.where(frame>max_allowed)
-        median_int = np.median(frame)
-        # change those values to background (median) values
-        for (x,y) in zip(*cosmic_ix):
-            frame[x,y] = median_int
+    frame = remove_cs(im)
     return (frame - np.min(frame)) / (np.max(frame) - np.min(frame))
 
 @jit(nopython=True)
@@ -1720,3 +1702,30 @@ def add_cbar(ax, arr, ylabel='', cmap=plt.cm.viridis):
     cax.set_ylabel(ylabel)
     cax.yaxis.set_label_position('left')
     return cax
+
+def remove_cs(im, perc=1e-4, tol=3, wsize=10):
+    """
+    Replace hot pixels or cosmic rays with window median value
+
+    Arguments
+    ---------
+    im: array
+    perc, tol: float
+        Percentile and tolerance. Pixels larger than (100-perc)*tol are replaced.
+    wsize: int
+        size of window
+
+    Returns
+    ---------
+    frame: array
+        image with hot pixels replaced by median value of a 5x5 square
+    """
+    frame = im.copy()
+    s = wsize//2
+    max_allowed = np.percentile(frame, 100-perc)*tol
+    # identify where hot pixels are
+    cosmic_ix = np.where(frame>max_allowed)
+    # change those values to median values of a wsize*wsize window
+    for (x,y) in zip(*cosmic_ix):
+        frame[x,y] = np.median(frame[x-s:x+s, y-s:y+s])
+    return frame
