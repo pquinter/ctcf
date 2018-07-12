@@ -1492,7 +1492,7 @@ def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label='', color='b', title=''):
         ax.plot(*ecdf(arr, conventional=formal), alpha=alpha, label=label, color=color)
     else:
         ax.scatter(*ecdf(arr, conventional=formal), s=15, alpha=alpha, label=label, color=color)
-    ax.set(ylabel='ECDF', xlabel='value', title=title)
+    ax.set(ylabel='ECDF', xlabel=label, title=title)
     sns.despine()
     plt.tight_layout()
 
