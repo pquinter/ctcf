@@ -26,7 +26,70 @@ from skimage.external.tifffile import TiffFile
 from scipy import ndimage
 
 from numba import jit
-from bebi103_legacy import ecdf
+
+def ecdf(data, conventional=False, buff=0.1, min_x=None, max_x=None):
+    """
+    Computes the x and y values for an ECDF of a one-dimensional
+    data set.
+
+    Parameters
+    ----------
+    data : array_like
+        Array of data to be plotted as an ECDF.
+    conventional : bool, default False
+        If True, generates x,y values for "conventional" ECDF, which
+        give staircase style ECDF when plotted as plt.plot(x, y, '-').
+        Otherwise, gives points x,y corresponding to the concave
+        corners of the conventional ECDF, plotted as
+        plt.plot(x, y, '.').
+    buff : float, default 0.1
+        How long the tails at y = 0 and y = 1 should extend as a
+        fraction of the total range of the data. Ignored if
+        `coneventional` is False.
+    min_x : float, default -np.inf
+        If min_x is greater than extent computed from `buff`, tail at
+        y = 0 extends to min_x. Ignored if `coneventional` is False.
+    max_x : float, default -np.inf
+        If max_x is less than extent computed from `buff`, tail at
+        y = 0 extends to max_x. Ignored if `coneventional` is False.
+
+    Returns
+    -------
+    x : array_like, shape (n_data, )
+        The x-values for plotting the ECDF.
+    y : array_like, shape (n_data, )
+        The y-values for plotting the ECDF.
+    """
+
+    # Get x and y values for data points
+    x, y = np.sort(data), np.arange(1, len(data)+1) / len(data)
+
+    if conventional:
+        # Set defaults for min and max tails
+        if min_x is None:
+            min_x = -np.inf
+        if max_x is None:
+            max_x = np.inf
+
+        # Set up output arrays
+        x_conv = np.empty(2*(len(x) + 1))
+        y_conv = np.empty(2*(len(x) + 1))
+
+        # y-values for steps
+        y_conv[:2] = 0
+        y_conv[2::2] = y
+        y_conv[3::2] = y
+
+        # x- values for steps
+        x_conv[0] = max(min_x, x[0] - (x[-1] - x[0])*buff)
+        x_conv[1] = x[0]
+        x_conv[2::2] = x
+        x_conv[3:-1:2] = x[1:]
+        x_conv[-1] = min(max_x, x[-1] + (x[-1] - x[0])*buff)
+
+        return x_conv, y_conv
+
+    return x, y
 
 def split_project(im_col):
     """
