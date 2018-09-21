@@ -1259,7 +1259,8 @@ def get_bbox(center, size=9, im=None, return_im=True, pad=2, mark_center=False,
     else: return bbox
 
 def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
-        pad=0, mark_center=0, im3d=False, size_z=None, coords_col=None):
+        pad=0, mark_center=0, im3d=False, size_z=None, coords_col=None,
+        frame_col='frame'):
     """
     Get square bounding boxes in batch around center coords from dataframe
 
@@ -1309,11 +1310,11 @@ def get_batch_bbox(bbox_df, ims_dict, size=9, movie=False,
                             No image dictinary provided.
                             Assuming all images come from single movie.""")
             ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
-                    ims_dict[int(x.frame)], mark_center=mark_center, pad=pad,
+                    ims_dict[int(x[frame_col])], mark_center=mark_center, pad=pad,
                     size_z=size_z)], axis=1)
         else:
             ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
-                    ims_dict[x.imname][int(x.frame)], mark_center=mark_center,
+                    ims_dict[x.imname][int(x[frame_col])], mark_center=mark_center,
                     pad=pad, size_z=size_z)], axis=1)
     else:
         ims_df = bbox_df.apply(lambda x: [_getbboxfunc(x[coords], size,
