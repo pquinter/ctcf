@@ -1178,7 +1178,7 @@ def load_zproject_STKcollection(load_pattern, savedir=None):
         io.imsave(savedir, projected)
     return projected
 
-def im_block(ims, cols, norm=True):
+def im_block(ims, cols, norm=True, sort=False):
     """
     Construct block of images
 
@@ -1190,6 +1190,8 @@ def im_block(ims, cols, norm=True):
         number of columns in image block
     norm: bool
         whether to normalize/scale each image
+    sort: False or function
+        whether to sort images with output value of function before making block
 
     Returns
     ---------
@@ -1204,6 +1206,9 @@ def im_block(ims, cols, norm=True):
     ims = np.stack(ims)
     if norm:
         ims = normalize(ims)
+    if sort:
+        ims = ims[np.argsort(sort(sort(ims, axis=1), axis=1))]
+    # make image block
     nrows = int(ims.shape[0]/cols)
     xdim, ydim = ims.shape[1:]
     block = []
