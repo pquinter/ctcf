@@ -1170,7 +1170,11 @@ def load_zproject_STKcollection(load_pattern, savedir=None):
 
     """
     collection = io.ImageCollection(load_pattern, load_func=TiffFile)
-    projected = [z_project(zseries.asarray()) for zseries in collection]
+    projected = []
+    for zseries in collection:
+        _im = zseries.asarray()
+        if _im.ndim>2: _im = z_project(_im)
+        projected.append(_im)
     if len(collection)>1:
         projected = np.stack(projected)
     else: projected = projected[0]
