@@ -1497,7 +1497,8 @@ def sel_training(df, ims_dict, s=9, ncols=10, cmap='viridis', scale=1,
     sel_bool = np.isin(np.arange(len(df)), list(selected))
     return sel_bool, df_ims, df
 
-def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
+def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False,
+        imname_col='imname'):
     """
     Classify images from dataframe
 
@@ -1524,8 +1525,8 @@ def classify_spots_from_df(spot_df, clf, im_dict, s, movie=False, norm=False):
     spot_clf = spot_df.copy()
     # clear spot_clf too close to borders
     spot_clf = spot_clf[spot_clf.apply(lambda x: check_borders(x[['x','y']],
-                        im_dict[x.imname], s), axis=1)].reset_index(drop=True)
-    spot_ims = get_batch_bbox(spot_clf, im_dict, size=s, movie=movie)
+                        im_dict[x[imname_col]], s), axis=1)].reset_index(drop=True)
+    spot_ims = get_batch_bbox(spot_clf, im_dict, size=s, movie=movie, imname_col=imname_col)
     if norm:
         spot_ims = normalize_im(spot_ims)
     # ravel for classif
@@ -1569,7 +1570,7 @@ def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label='', xlabel='', color='b',
     sns.despine()
     plt.tight_layout()
 
-def load_ims(rdir, ext, channel=None):
+def load_ims(rdir, ext, sep='_', strain_pos=1, stage_pos=4, channel=None):
     """ Load images to dictionary """
     ims = {}
     for _dir in tqdm(os.listdir(rdir)):
@@ -1584,8 +1585,9 @@ def load_ims(rdir, ext, channel=None):
                 collection = io.ImageCollection(ddir+fname, load_func=TiffFile)
                 im = np.stack([z.asarray() for z in collection])[0]
             else: continue
-            _fname = fname.split('_')
-            ims[_fname[1]+'_'+_fname[2].split('.')[0]] = im
+            _fname = fname.split(sep)
+            # make name with strain_stageno; remove any extensions if present
+            ims[_fname[strain_pos]+'_'+_fname[stage_pos].split('.')[0]] = im
     return ims
 
 def segment_from_seeds(im, seed_markers, mask_params, dilate=False):
