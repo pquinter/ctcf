@@ -427,7 +427,7 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.m
         thresholded binary image 
     """
     if im_thresh is None:
-        im_thresh = im>threshold_local(im, block_size)
+        im_thresh = im>np.median(im)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh, selem=selem)
@@ -1602,6 +1602,7 @@ def segment_from_seeds(im, seed_markers, mask_params, dilate=False):
         integer labeled image of seeds to expand from for watershed
     mask_params: tuple of 3
         min_size, block_size, disk_size for mask_image func
+        min size also used to filter markers
     dilate: bool
         whether to perform morphological dilation.
         Useful to keep stuff close to edge
@@ -1623,6 +1624,13 @@ def segment_from_seeds(im, seed_markers, mask_params, dilate=False):
     # watershed transform using nuclei as basins, also removes cells wo nucleus
     markers = skimage.morphology.watershed(markers,
             seed_markers, mask=mask)
+
+    # remove markers of less than min size
+    regionprops = skimage.measure.regionprops(markers)
+    regionprops = regionprops2df(regionprops, props=('label', 'area'))
+    # remove candidates smaller than min size
+    for flabel in regionprops[regionprops.area<min_size].label.values:
+        markers[np.where(np.isclose(markers, flabel))] = 0
 
     # ensure use of same labels for nuclei
     seed_mask = seed_markers>0
@@ -1647,7 +1655,6 @@ def make_seg_im(markers, im):
         image with segmentation boundaries
     """
     seg_im = im.copy()
-    print('making segmentation image with highlighted boundaries...')
     for marker in markers:
         seg_im[skimage.segmentation.find_boundaries(marker)] = np.max(seg_im)
     return seg_im
