@@ -208,7 +208,7 @@ def fakeRGB2gray(im):
         warnings.warn('Image has only one channel')
         return im
 
-def im_hist(im):
+def im_hist(im, ax=None):
     """
     Plot image pixel intensity histogram
 
@@ -222,12 +222,10 @@ def im_hist(im):
     None (only plots histogram)
     """
     hist, bins = skimage.exposure.histogram(im)
+    if ax is None: fig, ax = plt.subplots()
     with sns.axes_style('darkgrid'):
-        plt.fill_between(bins, hist, lw=0.25, alpha=0.4)
-        plt.yscale('log')
-        plt.xlabel('normalized pixel value')
-        plt.ylabel('count')
-
+        ax.fill_between(bins, hist, lw=0.25, alpha=0.4)
+        ax.set(yscale='log', xlabel='normalized pixel value', ylabel='count')
     return None
 
 def rectangleROI(im, pad=0, thresh=None):
@@ -1560,12 +1558,12 @@ def filter_parts(spot_df, thresh=2):
     good_parts = spot_df[spot_df.pid.isin(good_parts)]
     return good_parts
 
-def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label='', xlabel='', color='b', title=''):
+def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label='', xlabel='', color='b', title='', rasterized=False):
     if ax==None: fig, ax = plt.subplots(1)
     if formal:
-        ax.plot(*ecdf(arr, conventional=formal), alpha=alpha, label=label, color=color)
+        ax.plot(*ecdf(arr, conventional=formal), alpha=alpha, label=label, color=color, rasterized=rasterized)
     else:
-        ax.scatter(*ecdf(arr, conventional=formal), s=15, alpha=alpha, label=label, color=color)
+        ax.scatter(*ecdf(arr, conventional=formal), s=15, alpha=alpha, label=label, color=color, rasterized=rasterized)
     ax.set(ylabel='ECDF', xlabel=xlabel, title=title)
     sns.despine()
     plt.tight_layout()
