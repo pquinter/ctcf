@@ -1800,6 +1800,8 @@ def remove_cs(im, perc=1e-4, tol=3, wsize=10):
     frame: array
         image with hot pixels replaced by median value of a 5x5 square
     """
+    if im.ndim>3:
+        return np.array([remove_cs(i) for i in im])
     frame = im.copy()
     s = wsize//2
     max_allowed = np.percentile(frame, 100-perc)*tol
