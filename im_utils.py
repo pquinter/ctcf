@@ -26,6 +26,7 @@ from skimage.external.tifffile import TiffFile
 from scipy import ndimage
 
 from numba import jit
+from joblib import Parallel, delayed
 
 def ecdf(data, conventional=False, buff=0.1, min_x=None, max_x=None):
     """
@@ -1150,7 +1151,7 @@ def normalize_im(im):
     scaled = (im - np.min(im)) / (np.max(im) - np.min(im))
     return scaled
 
-def load_zproject_STKcollection(load_pattern, savedir=None):
+def load_zproject_STKcollection(load_pattern, savedir=None, n_jobs=6):
     """
     Load collection or single STK files and do maximum intensity projection
 
@@ -1168,16 +1169,21 @@ def load_zproject_STKcollection(load_pattern, savedir=None):
 
     """
     collection = io.ImageCollection(load_pattern, load_func=TiffFile)
-    projected = []
-    for zseries in collection:
-        _im = zseries.asarray()
-        if _im.ndim>2: _im = z_project(_im)
-        projected.append(_im)
+    projected = Parallel(n_jobs=n_jobs)(delayed(z_project)(zseries.asarray())
+                       for zseries in tqdm(collection))
+    #projected = []
+    #for zseries in collection:
+    #    _im = zseries.asarray()
+    #    if _im.ndim>2: _im = z_project(_im)
+    #    projected.append(_im)
     if len(collection)>1:
         projected = np.stack(projected)
     else: projected = projected[0]
     if savedir:
-        io.imsave(savedir, projected)
+        try:
+            io.imsave(savedir, projected)
+        except:
+            warnings.warn("Could not save image. Make sure {} exists".format(savedir))
     return projected
 
 def im_block(ims, cols, norm=True, sort=False):
