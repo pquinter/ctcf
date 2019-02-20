@@ -296,7 +296,7 @@ def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim,
         # watershed transform using eroded cells as basins
         markers = skimage.morphology.watershed(markers,
                 im_mask_eroded, mask=im_mask)
-    nuclei = skimage.measure.regionprops(markers, im)
+    nuclei = skimage.measure.regionprops(markers, im, coordinates='xy')
     # get only markers within area bounds, above intensity thersh and 
     # not oversaturated
     all_labels = np.unique(markers)
@@ -399,7 +399,7 @@ def plot_nuclei_int(im_plot_r, im_plot_g, int_ratio):
     plt.tight_layout()
     return None
 
-def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.morphology.disk(15),
+def mask_image(im, im_thresh=None, min_size=15, block_size=101, selem=skimage.morphology.disk(15),
         clear_border=True):
     """
     Create a binary mask to segment nuclei using adaptive threshold.
@@ -426,7 +426,7 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=None, selem=skimage.m
         thresholded binary image 
     """
     if im_thresh is None:
-        im_thresh = im>np.median(im)
+        im_thresh = skimage.filters.threshold_adaptive(im, block_size)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh, selem=selem)
