@@ -27,6 +27,7 @@ from scipy import ndimage
 
 from numba import jit
 from joblib import Parallel, delayed
+import multiprocessing
 
 def ecdf(data, conventional=False, buff=0.1, min_x=None, max_x=None):
     """
@@ -426,7 +427,7 @@ def mask_image(im, im_thresh=None, min_size=15, block_size=101, selem=skimage.mo
         thresholded binary image 
     """
     if im_thresh is None:
-        im_thresh = skimage.filters.threshold_adaptive(im, block_size)
+        im_thresh = im>skimage.filters.threshold_local(im, block_size)
     im_thresh = skimage.morphology.remove_small_objects(im_thresh, min_size=min_size)
     im_thresh = ndimage.morphology.binary_fill_holes(im_thresh, morphology.disk(1.8))
     im_thresh = morphology.binary_opening(im_thresh, selem=selem)
@@ -1687,7 +1688,7 @@ def draw_outline(mov, mask):
     else: outlined_mov[outline] = np.max(outlined_mov)
     return outlined_mov
 
-def corr_widealspot(ims, wsize=13, PSFwidth=4.2):
+def corr_widealspot(ims, wsize=13, PSFwidth=4.2, n_jobs=multiprocessing.cpu_count()):
     """
     Compute correlation of set of image patches to an ideal spot:
     single point source blurred with gaussian of PSF width
@@ -1712,7 +1713,11 @@ def corr_widealspot(ims, wsize=13, PSFwidth=4.2):
     # pearson corr on projected im is best, assuming im is centered at potential
     # peak. This is usually eq to max of normalized cross-correlation.
     # Also tried spearman and 3d stacks, slower and not worth it.
-    corrs = np.array([np.corrcoef(idealspot.ravel(), im.ravel())[1][0] for im in ims])
+    corrs = Parallel(n_jobs=n_jobs)(delayed(np.corrcoef)(idealspot.ravel(), im.ravel())
+                       for im in tqdm(ims))
+    # retrieve relevant correlation coefficient from matrix
+    corrs = np.array([c[1][0] for c in corrs])
+    #corrs = np.array([np.corrcoef(idealspot.ravel(), im.ravel())[1][0] for im in ims])
     return corrs
 
 def concat_frames(frames):
