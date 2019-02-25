@@ -288,7 +288,7 @@ def label_sizesel(im, im_mask, maxint_lim, minor_ax_lim,
     nuclei: list of region props objects
         list of region properties of each labeled object
     """
-    markers = morphology.label(im_mask)
+    markers = skimage.morphology.label(im_mask)
     if watershed:
         # harsh erosion to get basins for watershed
         im_mask_eroded = skimage.measure.label(\
