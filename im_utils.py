@@ -1565,13 +1565,13 @@ def filter_parts(spot_df, thresh=2):
     good_parts = spot_df[spot_df.pid.isin(good_parts)]
     return good_parts
 
-def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label='', xlabel='', color='b', title='', rasterized=False):
+def plot_ecdf(arr, ax=None, alpha=0.3, formal=0, label='', ylabel='ECDF', xlabel='', color='b', title='', rasterized=False):
     if ax==None: fig, ax = plt.subplots(1)
     if formal:
         ax.plot(*ecdf(arr, conventional=formal), alpha=alpha, label=label, color=color, rasterized=rasterized)
     else:
         ax.scatter(*ecdf(arr, conventional=formal), s=15, alpha=alpha, label=label, color=color, rasterized=rasterized)
-    ax.set(ylabel='ECDF', xlabel=xlabel, title=title)
+    ax.set(ylabel=ylabel, xlabel=xlabel, title=title)
     sns.despine()
     plt.tight_layout()
 
