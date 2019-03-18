@@ -1216,7 +1216,10 @@ def im_block(ims, cols, norm=True, sort=False):
     if norm:
         ims = normalize(ims)
     if sort:
-        ims = ims[np.argsort(sort(sort(ims, axis=1), axis=1))]
+        if 'axis' in sort.__code__.co_varnames:# numpy function like max, min, mean
+            ims = ims[np.argsort(sort(sort(ims, axis=1), axis=1))]
+        else: # corr_widealspot and the likes working on image batches
+            ims = ims[np.argsort(sort(ims))]
     # make image block
     nrows = int(ims.shape[0]/cols)
     xdim, ydim = ims.shape[1:]
