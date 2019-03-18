@@ -1688,7 +1688,7 @@ def draw_outline(mov, mask):
     else: outlined_mov[outline] = np.max(outlined_mov)
     return outlined_mov
 
-def corr_widealspot(ims, wsize=13, PSFwidth=4.2, n_jobs=multiprocessing.cpu_count()):
+def corr_widealspot(ims, wsize=None, PSFwidth=4.2, n_jobs=multiprocessing.cpu_count()):
     """
     Compute correlation of set of image patches to an ideal spot:
     single point source blurred with gaussian of PSF width
@@ -1706,6 +1706,8 @@ def corr_widealspot(ims, wsize=13, PSFwidth=4.2, n_jobs=multiprocessing.cpu_coun
     corrs: array
         correlations with ideal spot
     """
+    if wsize is None:
+        wsize = ims.shape[-1]
     # Create ideal spot
     idealspot = np.full((wsize,wsize), 0) # zero filled wsize*wsize array
     idealspot[wsize//2,wsize//2] = 1 # single light point source at the center
@@ -1713,12 +1715,15 @@ def corr_widealspot(ims, wsize=13, PSFwidth=4.2, n_jobs=multiprocessing.cpu_coun
     # pearson corr on projected im is best, assuming im is centered at potential
     # peak. This is usually eq to max of normalized cross-correlation.
     # Also tried spearman and 3d stacks, slower and not worth it.
-    corrs = Parallel(n_jobs=n_jobs)(delayed(np.corrcoef)(idealspot.ravel(), im.ravel())
-                       for im in tqdm(ims))
-    # retrieve relevant correlation coefficient from matrix
-    corrs = np.array([c[1][0] for c in corrs])
-    #corrs = np.array([np.corrcoef(idealspot.ravel(), im.ravel())[1][0] for im in ims])
-    return corrs
+    if ims.ndim>2:
+        corrs = Parallel(n_jobs=n_jobs)(delayed(np.corrcoef)(idealspot.ravel(), im.ravel())
+                           for im in tqdm(ims))
+        # retrieve relevant correlation coefficient from matrix
+        corrs = np.array([c[1][0] for c in corrs])
+        #corrs = np.array([np.corrcoef(idealspot.ravel(), im.ravel())[1][0] for im in ims])
+        return corrs
+    else:
+        return np.corrcoef(idealspot.ravel(), ims.ravel())[1][0]
 
 def concat_frames(frames):
     """
