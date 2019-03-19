@@ -1213,13 +1213,13 @@ def im_block(ims, cols, norm=True, sort=False):
         max_w = max([im.shape[1] for im in ims])
         ims = [resize_frame(im, max_h, max_w) for im in ims]
     ims = np.stack(ims)
-    if norm:
-        ims = normalize(ims)
     if sort:
         if 'axis' in sort.__code__.co_varnames:# numpy function like max, min, mean
             ims = ims[np.argsort(sort(sort(ims, axis=1), axis=1))]
         else: # corr_widealspot and the likes working on image batches
             ims = ims[np.argsort(sort(ims))]
+    if norm:
+        ims = normalize(ims)
     # make image block
     nrows = int(ims.shape[0]/cols)
     xdim, ydim = ims.shape[1:]
