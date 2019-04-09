@@ -116,22 +116,26 @@ def split_project(im_col):
     rfp = z_project(rfp)
     return gfp, rfp
 
-def z_project(stack, project='max'):
+def z_project(stack, project='max', mindim=2):
     """
     Z-project stack based on maximum value.
 
     Arguments
     ---------
-    stack: array_like. 
+    stack: array_like.
         input image stack
     project: str
         which value to project: maximum (max), minimum (min)
+    mindim: int
+        minimum number of dimensions in stack to project, otherwise return stack
 
     Returns
     ---------
     z_im: z-projection of image
     """
 
+    if stack.ndim<=mindim:
+        return stack
     if project == 'max':
         z_im = np.maximum.reduce([z for z in stack])
     if project == 'min':
