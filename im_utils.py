@@ -1799,7 +1799,7 @@ def add_cbar(ax, arr, ylabel='', cmap=plt.cm.viridis):
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.45)
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(arr))
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(arr.min(), arr.max()))
     sm._A = []
     plt.colorbar(sm, cax=cax)
     cax.set_ylabel(ylabel)
