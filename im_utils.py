@@ -7,8 +7,6 @@ Author: Porfirio Quintero-Cadena
 from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
-sns.set(font_scale=2)
-sns.set_style('white')
 
 import pandas as pd
 import numpy as np
