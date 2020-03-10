@@ -27,6 +27,18 @@ from numba import jit
 from joblib import Parallel, delayed
 import multiprocessing
 
+import matplotlib as mpl
+
+# matplotlib style
+rc= {'axes.edgecolor': '0.3', 'axes.labelcolor': '0.3', 'text.color':'0.3',
+    'axes.spines.top': 'False','axes.spines.right': 'False',
+    'xtick.color': '0.3', 'ytick.color': '0.3', 'font.size':'35',
+    'savefig.bbox':'tight', 'savefig.transparent':'True', 'savefig.dpi':'500'}
+for param in rc:
+    mpl.rcParams[param] = rc[param]
+
+
+
 def ecdf(data, conventional=False, buff=0.1, min_x=None, max_x=None):
     """
     Computes the x and y values for an ECDF of a one-dimensional
@@ -1216,9 +1228,9 @@ def im_block(ims, cols, norm=True, sort=False):
         ims = [resize_frame(im, max_h, max_w) for im in ims]
     ims = np.stack(ims)
     if sort:
-        if 'axis' in sort.__code__.co_varnames:# numpy function like max, min, mean
+        try:# numpy function like max, min, mean
             ims = ims[np.argsort(sort(sort(ims, axis=1), axis=1))]
-        else: # corr_widealspot and the likes working on image batches
+        except TypeError: # corr_widealspot and the likes working on image batches
             ims = ims[np.argsort(sort(ims))]
     if norm:
         ims = normalize(ims)
